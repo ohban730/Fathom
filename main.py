@@ -1,5 +1,5 @@
 """
-DeDoubt — FastAPI ローカルバックエンドサーバー (server/main.py)
+DeDoubt — FastAPI ローカルバックエンドサーバー (main.py)
 
 - Phase 2 VS Code 拡張機能向け REST API
 - AST解析・Ollama/Mock採点・SQLite永続化の全ロジックを統合
@@ -11,8 +11,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# ルートディレクトリの `dedoubt` パッケージをインポート可能にする
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ルートディレクトリをインポートパスに追加
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
@@ -41,7 +41,6 @@ DB_PATH = os.path.join(ROOT_DIR, "dedoubt.db")
 core = DeDoubtCore(db_path=DB_PATH)
 
 # リクエスト / レスポンスの Pydantic モデル定義
-
 class SessionStartRequest(BaseModel):
     file_path: str
     target_score: int = 70
@@ -62,6 +61,15 @@ class AnswerEvaluateRequest(BaseModel):
 # ──────────────────────────────────────────
 # API エンドポイント
 # ──────────────────────────────────────────
+
+@app.get("/")
+def read_root():
+    """ルートパスアクセス時の案内"""
+    return {
+        "message": "DeDoubt Local Backend API Server is running!",
+        "docs": "http://127.0.0.1:8000/docs",
+        "health": "http://127.0.0.1:8000/api/health"
+    }
 
 @app.get("/api/health")
 def health_check():
@@ -143,4 +151,4 @@ def get_dashboard_data(session_id: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
