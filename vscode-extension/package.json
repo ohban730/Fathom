@@ -1,0 +1,45 @@
+{
+  "name": "dedoubt-vscode",
+  "displayName": "DeDoubt — コード理解サポート",
+  "description": "バイブコーディングの理解負債を解消し、IDE内で直感的にコード理解度を学習・検証するVS Code拡張機能",
+  "version": "2.0.0",
+  "publisher": "dedoubt",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Education",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:dedoubt.startSession"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "dedoubt.startSession",
+        "title": "DeDoubt: 理解度テストを開始 (現在のファイル)",
+        "icon": "$(brain)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "dedoubt.startSession",
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^18.x",
+    "typescript": "^5.0.0"
+  }
+}

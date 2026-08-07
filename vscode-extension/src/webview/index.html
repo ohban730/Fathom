@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeDoubt — Code Understanding Agent</title>
+  <!-- Mermaid.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-card: #21262d;
+      --border-color: #30363d;
+      --text-main: #f0f6fc;
+      --text-muted: #8b949e;
+      --accent-blue: #58a6ff;
+      --accent-green: #3fb950;
+      --accent-red: #f85149;
+      --accent-amber: #d29922;
+      --accent-purple: #bc8cff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 24px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    /* 共通コンテナ & カード */
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+    .header-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent-blue);
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    /* プログレスバー */
+    .progress-bar-container {
+      width: 100%;
+      height: 8px;
+      background-color: var(--bg-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 12px 0 20px 0;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* メタ情報タグ */
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .meta-item {
+      background: var(--bg-secondary);
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+    .meta-label { font-size: 0.75rem; color: var(--text-muted); }
+    .meta-value { font-size: 1rem; font-weight: 600; color: var(--text-main); }
+
+    /* 質問テキスト */
+    .question-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      color: var(--text-main);
+    }
+
+    /* Mermaid コンテナ */
+    .mermaid-box {
+      background-color: #0d1117;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 16px;
+      text-align: center;
+      overflow-x: auto;
+      margin-bottom: 16px;
+    }
+
+    /* アコーディオン */
+    details {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--accent-blue);
+      outline: none;
+    }
+    .details-content { margin-top: 12px; }
+
+    /* コードプレビュー */
+    pre code {
+      display: block;
+      background-color: #0d1117;
+      padding: 14px;
+      border-radius: 6px;
+      font-family: "Fira Code", Consolas, Monaco, monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      color: #e6edf3;
+      border: 1px solid var(--border-color);
+    }
+
+    /* 2回目以降の着眼点ガイド */
+    .hint-box {
+      background-color: rgba(210, 153, 34, 0.1);
+      border: 1px solid var(--accent-amber);
+      border-radius: 6px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .hint-title { font-weight: 700; color: var(--accent-amber); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+
+    /* テキストエリア & ボタン */
+    textarea {
+      width: 100%;
+      height: 140px;
+      background-color: var(--bg-secondary);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: vertical;
+      margin-bottom: 16px;
+    }
+    textarea:focus { outline: none; border-color: var(--accent-blue); }
+
+    .btn-group { display: flex; gap: 12px; }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: none;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+    }
+    .btn-primary { background-color: #238636; color: #ffffff; flex: 3; }
+    .btn-primary:hover { background-color: #2ea043; }
+    .btn-primary:disabled { background-color: #1a4e25; color: #8b949e; cursor: not-allowed; }
+    .btn-secondary { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); flex: 1; }
+    .btn-secondary:hover { background-color: var(--border-color); }
+
+    /* スコアカード */
+    .score-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+    }
+    .score-number { font-size: 2.8rem; font-weight: 800; color: var(--accent-blue); }
+    .status-badge {
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding: 8px 16px;
+      border-radius: 6px;
+    }
+    .status-passed { background-color: rgba(63, 185, 80, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
+    .status-failed { background-color: rgba(248, 81, 73, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); }
+
+    /* スコア詳細テーブル */
+    .rubric-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    .rubric-table th, .rubric-table td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .rubric-table th { background-color: var(--bg-secondary); color: var(--text-muted); font-size: 0.85rem; }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      background-color: rgba(248, 81, 73, 0.2);
+      color: var(--accent-red);
+      border: 1px solid var(--accent-red);
+      margin-right: 6px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ヘッダー -->
+  <div class="header-bar">
+    <div class="header-title">🧠 DeDoubt — コード理解サポート</div>
+    <div class="badge" id="engine-badge">Engine: Connecting...</div>
+  </div>
+
+  <!-- 【ビュー1: 初期ロード / 準備中】 -->
+  <div id="view-init" class="card">
+    <h2>📁 ファイル理解度テストの立ち上げ</h2>
+    <p style="color: var(--text-muted); margin-top: 8px;">エディタで選択されたファイルを解析中...</p>
+    <div style="margin-top: 20px;">
+      <p id="init-file-path" style="font-family: monospace; color: var(--accent-blue);"></p>
+    </div>
+  </div>
+
+  <!-- 【ビュー2: 質問・回答入力画面】 -->
+  <div id="view-question" class="card hidden">
+    <!-- プログレスバー -->
+    <div class="progress-bar-container">
+      <div id="progress-fill" class="progress-bar-fill"></div>
+    </div>
+
+    <!-- メタ情報 -->
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">Chunk進捗</div>
+        <div class="meta-value" id="chunk-meta">Chunk 1 / 2</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">理解軸</div>
+        <div class="meta-value" id="axis-meta">構造軸</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">難易度 / 目標</div>
+        <div class="meta-value" id="diff-meta">標準 (目標 70点)</div>
+      </div>
+    </div>
+
+    <!-- 質問タイトル -->
+    <div class="question-title" id="question-text">質問を読み込んでいます...</div>
+
+    <!-- Mermaid 参考図 -->
+    <div id="mermaid-container" class="mermaid-box hidden">
+      <div id="mermaid-graph"></div>
+    </div>
+
+    <!-- コード参照アコーディオン -->
+    <details>
+      <summary>🔍 対象コードを確認 (<span id="code-chunk-name">chunk</span>)</summary>
+      <div class="details-content">
+        <pre><code id="code-snippet"># Code snippet</code></pre>
+      </div>
+    </details>
+
+    <!-- ★ 2回目以降の着眼点ガイド (再挑戦時のみ表示) -->
+    <div id="hint-guide-container" class="hint-box hidden">
+      <div class="hint-title">💡 再回答のための着眼点ガイド (丸パクリ防止)</div>
+      <p id="last-feedback-text" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 8px;"></p>
+      <div id="miss-tags-container" style="margin-bottom: 10px;"></div>
+      <div style="font-size: 0.85rem; color: var(--text-muted);">
+        <b>【スコアを伸ばすための3つの視点】</b><br>
+        1. 🔍 <b>注目行:</b> 対象コード内の <code>if</code>, <code>assert</code>, <code>raise</code>, <code>return</code> の行を確認。<br>
+        2. ❓ <b>見落とし要素:</b> 前回の見落としタグ（例外名や戻り値など）を足す。<br>
+        3. 🗣️ <b>具体化:</b> 「どんな条件のとき」「何が発生するか/何を返すか」まで説明する。
+      </div>
+    </div>
+
+    <!-- 回答入力 -->
+    <h4 style="margin-bottom: 8px;">✏️ あなたの回答</h4>
+    <textarea id="answer-input" placeholder="例: この関数は数値aとbを受け取り、0除算や型の不正をチェックした上で割り算の結果を返します..."></textarea>
+
+    <div class="btn-group">
+      <button id="btn-submit" class="btn btn-primary">📤 回答を提出</button>
+      <button id="btn-skip" class="btn btn-secondary">スキップ</button>
+    </div>
+  </div>
+
+  <!-- 【ビュー3: 採点評価中】 -->
+  <div id="view-evaluating" class="card hidden" style="text-align: center; padding: 40px;">
+    <h2>⏳ コーチが回答を採点中...</h2>
+    <p style="color: var(--text-muted); margin-top: 12px;">項目別スコアリングと厳格な減点判定を行っています。</p>
+  </div>
+
+  <!-- 【ビュー4: 採点結果画面】 -->
+  <div id="view-result" class="card hidden">
+    <div class="score-banner">
+      <div>
+        <div style="font-size: 0.85rem; color: var(--text-muted);">理解度スコア</div>
+        <div class="score-number" id="result-score">0</div>
+      </div>
+      <div id="status-badge-container"></div>
+    </div>
+
+    <h4 style="margin-bottom: 8px;">✏️ あなたの提出回答</h4>
+    <blockquote id="submitted-answer-text" style="border-left: 3px solid var(--accent-blue); padding-left: 12px; color: var(--text-muted); margin-bottom: 20px;"></blockquote>
+
+    <h4 style="margin-bottom: 8px;">📋 項目別採点詳細</h4>
+    <table class="rubric-table">
+      <thead>
+        <tr>
+          <th>評価観点</th>
+          <th>得点</th>
+          <th>採点理由・コメント</th>
+        </tr>
+      </thead>
+      <tbody id="rubric-tbody"></tbody>
+    </table>
+
+    <div style="margin-top: 20px;">
+      <h4 style="margin-bottom: 8px;">💬 コーチからのアドバイス</h4>
+      <div id="coach-advice-box" style="padding: 12px; border-radius: 6px; background-color: var(--bg-secondary); border: 1px solid var(--border-color);"></div>
+    </div>
+
+    <div class="btn-group" style="margin-top: 24px;">
+      <button id="btn-next-chunk" class="btn btn-primary">▶️ 次のChunkへ進む</button>
+      <button id="btn-retry-chunk" class="btn btn-secondary">🔄 もう一度回答する (学び直し)</button>
+    </div>
+  </div>
+
+  <!-- 【ビュー5: 全セッション完了画面】 -->
+  <div id="view-finish" class="card hidden" style="text-align: center; padding: 40px;">
+    <h1 style="color: var(--accent-green); margin-bottom: 12px;">🎉 全Chunk完了！</h1>
+    <p style="color: var(--text-main); font-size: 1.1rem; margin-bottom: 24px;">指定されたファイルのすべてのコードChunkの理解度チェックが完了しました。</p>
+    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">全回答ログと成長データは SQLite <code>dedoubt.db</code> に安全に記録されています。</p>
+    <button id="btn-restart" class="btn btn-primary" style="max-width: 300px; margin: 0 auto;">🔄 最初のファイルで再テスト</button>
+  </div>
+
+  <script>
+    // VS Code API オブジェクトの取得
+    const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+    const API_BASE = "http://127.0.0.1:8000";
+
+    // アプリケーション状態
+    let state = {
+      filePath: "",
+      targetScore: 70,
+      sessionData: null,
+      currentChunkIdx: 0,
+      currentQuestion: null,
+      lastEvalResult: null
+    };
+
+    // 初期化
+    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
+    checkHealth();
+
+    // 疎通チェック
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${API_BASE}/api/health`);
+        const data = await res.json();
+        document.getElementById('engine-badge').innerText = `Engine: ${data.engine}`;
+      } catch(e) {
+        document.getElementById('engine-badge').innerText = `Engine: Disconnected (Port 8000)`;
+      }
+    }
+
+    // VS Code からのメッセージ受信用
+    window.addEventListener('message', event => {
+      const message = event.data;
+      if (message.command === 'initSession') {
+        state.filePath = message.filePath;
+        state.targetScore = message.targetScore || 70;
+        document.getElementById('init-file-path').innerText = state.filePath;
+        startSession();
+      }
+    });
+
+    // 1. セッション開始 API
+    async function startSession() {
+      showView('view-init');
+      try {
+        const res = await fetch(`${API_BASE}/api/session/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_path: state.filePath, target_score: state.targetScore })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+          state.sessionData = json.data;
+          state.currentChunkIdx = 0;
+          loadQuestionForCurrentChunk();
+        } else {
+          alert('エラー: ' + json.detail);
+        }
+      } catch(e) {
+        alert('FastAPI サーバーに接続できませんでした: ' + e);
+      }
+    }
+
+    // 2. 質問生成 API
+    async function loadQuestionForCurrentChunk() {
+      const chunks = state.sessionData.chunks;
+      if (state.currentChunkIdx >= chunks.length) {
+        showView('view-finish');
+        return;
+      }
+
+      showView('view-init'); // ローディング
+      const currentChunk = chunks[state.currentChunkIdx];
+      const axis = state.currentChunkIdx % 2 === 0 ? "構造軸" : "関係軸";
+
+      try {
+        const res = await fetch(`${API_BASE}/api/question/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chunk: currentChunk, axis: axis, difficulty: "標準" })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+          state.currentQuestion = json.data;
+          renderQuestionView(currentChunk, state.currentQuestion);
+        }
+      } catch(e) {
+        alert('質問生成エラー: ' + e);
+      }
+    }
+
+    // 3. 質問ビューのレンダリング
+    function renderQuestionView(chunk, qData) {
+      showView('view-question');
+
+      const total = state.sessionData.chunks.length;
+      const idx = state.currentChunkIdx + 1;
+      document.getElementById('progress-fill').style.width = `${(idx / total) * 100}%`;
+      document.getElementById('chunk-meta').innerText = `Chunk ${idx} / ${total} — ${chunk.name}`;
+      document.getElementById('axis-meta').innerText = qData.axis || "構造軸";
+      document.getElementById('diff-meta').innerText = `${qData.difficulty || "標準"} (目標 ${state.targetScore}点)`;
+      document.getElementById('question-text').innerText = qData.question;
+
+      document.getElementById('code-chunk-name').innerText = `${chunk.name} L${chunk.start_line}-L${chunk.end_line}`;
+      document.getElementById('code-snippet').innerText = chunk.code_segment;
+
+      // Mermaid 図
+      const mContainer = document.getElementById('mermaid-container');
+      const mGraph = document.getElementById('mermaid-graph');
+      if (qData.mermaid_diagram) {
+        mContainer.classList.remove('hidden');
+        mGraph.innerHTML = `<div class="mermaid">${qData.mermaid_diagram}</div>`;
+        try {
+          mermaid.contentLoaded();
+        } catch(e) {}
+      } else {
+        mContainer.classList.add('hidden');
+      }
+
+      // 2回目以降の着眼点ガイド
+      const hintContainer = document.getElementById('hint-guide-container');
+      if (state.lastEvalResult && !state.lastEvalResult.is_passed) {
+        hintContainer.classList.remove('hidden');
+        document.getElementById('last-feedback-text').innerText = `前回のフィードバック: ${state.lastEvalResult.feedback || ''}`;
+        
+        const tagsBox = document.getElementById('miss-tags-container');
+        tagsBox.innerHTML = '';
+        (state.lastEvalResult.miss_categories || []).forEach(tag => {
+          tagsBox.innerHTML += `<span class="tag">${tag}</span>`;
+        });
+      } else {
+        hintContainer.classList.add('hidden');
+      }
+
+      document.getElementById('answer-input').value = '';
+    }
+
+    // 4. 回答評価 API
+    document.getElementById('btn-submit').addEventListener('click', () => submitAnswer(false));
+    document.getElementById('btn-skip').addEventListener('click', () => submitAnswer(true));
+
+    async function submitAnswer(isSkip) {
+      const answerText = isSkip ? "(パス)" : document.getElementById('answer-input').value.trim();
+      if (!isSkip && !answerText) return;
+
+      showView('view-evaluating');
+
+      const currentChunk = state.sessionData.chunks[state.currentChunkIdx];
+
+      try {
+        const res = await fetch(`${API_BASE}/api/answer/evaluate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: state.sessionData.session.id,
+            chunk: currentChunk,
+            question_data: state.currentQuestion,
+            user_answer: answerText,
+            target_score: state.targetScore
+          })
+        });
+        const json = await res.json();
+        if (json.status === 'success') {
+          state.lastEvalResult = json.data;
+          renderResultView(answerText, json.data);
+        }
+      } catch(e) {
+        alert('評価処理エラー: ' + e);
+      }
+    }
+
+    // 5. 採点結果ビューの描画
+    function renderResultView(userAnswer, evalRes) {
+      showView('view-result');
+
+      document.getElementById('result-score').innerText = evalRes.score;
+      document.getElementById('submitted-answer-text').innerText = userAnswer;
+
+      const badgeContainer = document.getElementById('status-badge-container');
+      if (evalRes.is_passed) {
+        badgeContainer.innerHTML = `<div class="status-badge status-passed">✅ 合格</div>`;
+      } else {
+        badgeContainer.innerHTML = `<div class="status-badge status-failed">📖 要復習</div>`;
+      }
+
+      // ルーブリック詳細
+      const tbody = document.getElementById('rubric-tbody');
+      tbody.innerHTML = '';
+      (evalRes.score_details || []).forEach(item => {
+        tbody.innerHTML += `
+          <tr>
+            <td><b>${item.name}</b></td>
+            <td><b style="color: ${item.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${item.score}</b> / ${item.max} 点</td>
+            <td style="color: var(--text-muted); font-size: 0.9rem;">${item.reason}</td>
+          </tr>
+        `;
+      });
+
+      // アドバイス
+      document.getElementById('coach-advice-box').innerText = evalRes.feedback || "頑張りましょう！";
+    }
+
+    // ボタンナビゲーション
+    document.getElementById('btn-next-chunk').addEventListener('click', () => {
+      state.currentChunkIdx++;
+      state.lastEvalResult = null; // リセット
+      loadQuestionForCurrentChunk();
+    });
+
+    document.getElementById('btn-retry-chunk').addEventListener('click', () => {
+      renderQuestionView(state.sessionData.chunks[state.currentChunkIdx], state.currentQuestion);
+    });
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      startSession();
+    });
+
+    function showView(viewId) {
+      ['view-init', 'view-question', 'view-evaluating', 'view-result', 'view-finish'].forEach(id => {
+        const el = document.getElementById(id);
+        if (id === viewId) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      });
+    }
+
+    // 単体起動テスト用の初期実行
+    if (!vscode) {
+      state.filePath = "C:\\Users\\owner\\Documents\\lab\\DeDoughtスプレッドシート\\検証用ファイル\\assert-and-raise.py";
+      document.getElementById('init-file-path').innerText = state.filePath;
+      startSession();
+    }
+  </script>
+</body>
+</html>
