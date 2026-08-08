@@ -13,6 +13,7 @@
   ],
   "activationEvents": [
     "onCommand:dedoubt.startSession",
+    "onCommand:dedoubt.showRecentFiles",
     "onView:dedoubt.panelView"
   ],
   "main": "./out/extension.js",
@@ -22,6 +23,11 @@
         "command": "dedoubt.startSession",
         "title": "DeDoubt: 理解度テストを開始 (現在のファイル)",
         "icon": "$(brain)"
+      },
+      {
+        "command": "dedoubt.showRecentFiles",
+        "title": "DeDoubt: 最近テストしたファイルを開く",
+        "icon": "$(history)"
       }
     ],
     "keybindings": [

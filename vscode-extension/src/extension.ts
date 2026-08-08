@@ -46,6 +46,22 @@ async function waitUntilHealthy(apiBase: string, retries = 30, intervalMs = 300)
     return false;
 }
 
+function httpGetJson(url: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+        http.get(url, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    resolve(JSON.parse(data));
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', reject);
+    });
+}
+
 // main.py(FastAPIバックエンド)をサブプロセスとして起動・監督するクラス。
 // ポートは固定せず空きポートを動的に確保することで、他プロセスとの競合を避ける。
 class BackendServer {
@@ -117,7 +133,10 @@ class DeDoubtViewProvider implements vscode.WebviewViewProvider {
     private pendingMessage?: any;
     private apiBase?: string;
 
-    constructor(private readonly context: vscode.ExtensionContext) {}
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly onProgressUpdate: (fileName: string, current: number, total: number) => void
+    ) {}
 
     resolveWebviewView(webviewView: vscode.WebviewView): void {
         this.view = webviewView;
@@ -146,6 +165,12 @@ class DeDoubtViewProvider implements vscode.WebviewViewProvider {
                     webviewView.webview.postMessage(this.pendingMessage);
                     this.pendingMessage = undefined;
                 }
+            } else if (message?.command === 'progressUpdate') {
+                this.onProgressUpdate(message.fileName, message.current, message.total);
+            } else if (message?.command === 'showRecentFiles') {
+                vscode.commands.executeCommand('dedoubt.showRecentFiles');
+            } else if (message?.command === 'addFolderToWorkspace') {
+                vscode.commands.executeCommand('workbench.action.addRootFolder');
             }
         });
 
@@ -177,7 +202,17 @@ class DeDoubtViewProvider implements vscode.WebviewViewProvider {
 export function activate(context: vscode.ExtensionContext) {
     console.log('DeDoubt VS Code Extension is active.');
 
-    const provider = new DeDoubtViewProvider(context);
+    // 対象ファイル・進捗を表示するステータスバー項目(クリックでパネルを開く)
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem.command = `${DeDoubtViewProvider.viewType}.focus`;
+    statusBarItem.text = '$(sparkle) DeDoubt';
+    statusBarItem.tooltip = 'DeDoubtパネルを開く';
+    statusBarItem.show();
+    context.subscriptions.push(statusBarItem);
+
+    const provider = new DeDoubtViewProvider(context, (fileName, current, total) => {
+        statusBarItem.text = `$(sparkle) DeDoubt: ${fileName} (${current}/${total})`;
+    });
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(DeDoubtViewProvider.viewType, provider)
     );
@@ -239,6 +274,43 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     context.subscriptions.push(disposable);
+
+    // コマンド登録: dedoubt.showRecentFiles (フォルダをまたいだ最近のテスト対象ファイル一覧)
+    const showRecentDisposable = vscode.commands.registerCommand('dedoubt.showRecentFiles', async () => {
+        if (!backend.apiBase) {
+            vscode.window.showWarningMessage('DeDoubt: バックエンドがまだ起動していません。');
+            return;
+        }
+
+        try {
+            const json = await httpGetJson(`${backend.apiBase}/api/projects/recent?limit=15`);
+            const projects: any[] = json?.data ?? [];
+            if (json?.status !== 'success' || projects.length === 0) {
+                vscode.window.showInformationMessage('DeDoubt: まだテストしたファイルの履歴がありません。');
+                return;
+            }
+
+            const items = projects.map((p) => ({
+                label: `$(file) ${path.basename(p.file_path)}`,
+                description: p.last_session_at ? new Date(p.last_session_at).toLocaleString() : '',
+                detail: p.file_path,
+                filePath: p.file_path as string
+            }));
+
+            const picked = await vscode.window.showQuickPick(items, {
+                placeHolder: '最近テストしたファイルを選択(フォルダをまたいで一覧表示)',
+                matchOnDetail: true
+            });
+            if (picked) {
+                const doc = await vscode.workspace.openTextDocument(picked.filePath);
+                await vscode.window.showTextDocument(doc);
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`DeDoubt: 最近のファイル取得に失敗しました。${err?.message ?? err}`);
+        }
+    });
+
+    context.subscriptions.push(showRecentDisposable);
 }
 
 export function deactivate() {}

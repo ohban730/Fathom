@@ -19,7 +19,7 @@ if ROOT_DIR not in sys.path:
 from dedoubt.core import DeDoubtCore
 from dedoubt.parser import CodeChunk
 from dedoubt.llm import OllamaClient, MockLLMClient, is_unknown_or_empty_answer
-from dedoubt.db import get_qa_histories_for_session, get_chunk_history_summary
+from dedoubt.db import get_qa_histories_for_session, get_chunk_history_summary, get_recent_projects
 
 app = FastAPI(
     title="DeDoubt Local Backend API",
@@ -148,6 +148,18 @@ def get_dashboard_data(session_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ダッシュボード取得エラー: {str(e)}")
+
+@app.get("/api/projects/recent")
+def recent_projects(limit: int = 10):
+    """直近にセッションを開始した対象ファイルを新しい順に取得(フォルダをまたいだ最近のファイル一覧用)"""
+    try:
+        data = get_recent_projects(limit=limit, db_path=DB_PATH)
+        return {
+            "status": "success",
+            "data": data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"最近のファイル取得エラー: {str(e)}")
 
 @app.get("/api/analytics/{project_id}")
 def get_project_analytics_data(project_id: int):

@@ -72,6 +72,26 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         """)
         conn.commit()
 
+def get_recent_projects(limit: int = 10, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
+    """直近にセッションを開始したプロジェクト(対象ファイル)を新しい順に取得。
+    projects.updated_at はファイル内容の変更検知用であり「最後にテストした時刻」ではないため、
+    sessions.started_at の最大値でソートする。"""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT p.*, MAX(s.started_at) AS last_session_at
+            FROM projects p
+            JOIN sessions s ON s.project_id = p.id
+            GROUP BY p.id
+            ORDER BY last_session_at DESC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        return [dict(r) for r in cursor.fetchall()]
+
 def get_or_create_project(file_path: str, file_hash: Optional[str] = None, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
     init_db(db_path)
     now = datetime.now().isoformat()

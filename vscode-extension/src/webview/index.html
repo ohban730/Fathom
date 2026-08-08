@@ -203,6 +203,9 @@
         📁 読み込み中...
       </span>
 
+      <button id="btn-recent-files" class="w-5 h-5 rounded-full bg-brand-card border border-brand-border text-brand-muted hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center text-[11px] transition-colors" title="最近テストしたファイルを開く(フォルダをまたいで一覧表示)">🕒</button>
+      <button id="btn-add-folder" class="w-5 h-5 rounded-full bg-brand-card border border-brand-border text-brand-muted hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center text-[11px] transition-colors" title="ワークスペースにフォルダを追加">📂</button>
+
       <div class="popover-wrapper">
         <span class="w-5 h-5 rounded-full bg-brand-card border border-brand-border text-brand-muted hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center text-[11px] font-bold cursor-help transition-colors" tabindex="0">?</span>
         <div class="popover-content popover-below popover-right">
@@ -459,6 +462,21 @@
         loadQuestion();
       });
 
+      document.getElementById('btn-recent-files').addEventListener('click', () => {
+        if (vscode) {
+          vscode.postMessage({ command: 'showRecentFiles' });
+        } else {
+          showToast('VS Code拡張機能内でのみ利用できます');
+        }
+      });
+      document.getElementById('btn-add-folder').addEventListener('click', () => {
+        if (vscode) {
+          vscode.postMessage({ command: 'addFolderToWorkspace' });
+        } else {
+          showToast('VS Code拡張機能内でのみ利用できます');
+        }
+      });
+
       window.addEventListener('message', (event) => {
         const message = event.data;
         if (message.command === 'backendReady') {
@@ -633,9 +651,22 @@
       loadQuestion();
     }
 
+    // 拡張ホストのステータスバー項目へ、現在の対象ファイルと進捗を通知する
+    function postProgressToHost() {
+      if (!vscode || !state.sessionData) return;
+      const fileName = state.filePath.split('\\').pop() || state.filePath.split('/').pop();
+      vscode.postMessage({
+        command: 'progressUpdate',
+        fileName: fileName,
+        current: Math.min(state.currentChunkIdx + 1, state.sessionData.chunks.length),
+        total: state.sessionData.chunks.length
+      });
+    }
+
     function renderConstellation() {
       const box = document.getElementById('constellation-box');
       if (!state.sessionData) return;
+      postProgressToHost();
       const chunks = state.sessionData.chunks;
       const n = chunks.length;
       const width = Math.max(320, n * 90);
