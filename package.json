@@ -1,0 +1,9 @@
+{
+  "name": "dedoubt-root",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "compile": "npm --prefix vscode-extension run compile",
+    "watch": "npm --prefix vscode-extension run watch"
+  }
+}

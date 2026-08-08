@@ -79,7 +79,32 @@ class MockLLMClient(LLMClient):
         # 【タスク: 質問生成】
         # ──────────────────────────────────────────
         if "【タスク: 質問生成】" in prompt:
-            if "divide_with_raise" in prompt:
+            if "名前: __main__" in prompt:
+                return json.dumps({
+                    "question": "この `if __name__ == \"__main__\":` ブロックは `divide_with_raise()` と `process_scores_with_assert()` をそれぞれどのような引数・順序で呼び出しており、発生した例外をどう捕捉していますか？呼び出しの流れを説明してください。",
+                    "axis": "関係軸",
+                    "difficulty": "標準",
+                    "rubric": [
+                        {"name": "divide_with_raise()の呼び出しと例外捕捉(ValueError/TypeError)", "max": 40},
+                        {"name": "process_scores_with_assert()の呼び出しと例外捕捉(AssertionError)", "max": 40},
+                        {"name": "try-exceptによる呼び出し順序・エラーハンドリングの流れ", "max": 20}
+                    ],
+                    "mermaid_diagram": "sequenceDiagram\n    participant Main as __main__\n    participant D as divide_with_raise\n    participant P as process_scores_with_assert\n    Main->>D: divide_with_raise(10, 0)\n    D-->>Main: raise ValueError\n    Main->>D: divide_with_raise(10, \"5\")\n    D-->>Main: raise TypeError\n    Main->>P: process_scores_with_assert([])\n    P-->>Main: raise AssertionError"
+                }, ensure_ascii=False)
+            elif "名前: モジュールの実行フロー" in prompt:
+                return json.dumps({
+                    "question": "このスクリプトは `iter()` と `next()` をどのような順序で使ってリストからデータを取り出しており、要素が尽きたときにどのような例外が発生し、それが `for` 文の裏側の動作とどう対応していますか？説明してください。",
+                    "axis": "関係軸",
+                    "difficulty": "標準",
+                    "rubric": [
+                        {"name": "iter()でイテレータを生成する仕組み", "max": 25},
+                        {"name": "next()による1件ずつの取り出しと呼び出し回数", "max": 25},
+                        {"name": "要素が尽きた際のStopIteration発生", "max": 25},
+                        {"name": "forループとiter/nextの対応関係", "max": 25}
+                    ],
+                    "mermaid_diagram": "sequenceDiagram\n    participant S as スクリプト\n    participant It as fruits_iterator\n    S->>It: iter(fruits)\n    S->>It: next() (1回目)\n    It-->>S: \"apple\"\n    S->>It: next() (2回目)\n    It-->>S: \"banana\"\n    S->>It: next() (3回目)\n    It-->>S: \"cherry\"\n    S->>It: next() (4回目)\n    It-->>S: raise StopIteration"
+                }, ensure_ascii=False)
+            elif "名前: divide_with_raise" in prompt:
                 return json.dumps({
                     "question": "`divide_with_raise()` 関数は引数 `a` と `b` に対してどのような例外検証(raise)を行い、どのような結果を返すか説明してください。",
                     "axis": "構造軸（物理的内容）",
@@ -92,7 +117,7 @@ class MockLLMClient(LLMClient):
                     ],
                     "mermaid_diagram": "graph TD\n    A[\"divide_with_raise(a, b)\"] --> B{\"a, bが数値?\"}\n    B -->|No| C[\"raise TypeError\"]\n    B -->|Yes| D{\"b == 0?\"}\n    D -->|Yes| E[\"raise ValueError\"]\n    D -->|No| F[\"return a / b\"]"
                 }, ensure_ascii=False)
-            elif "process_scores_with_assert" in prompt:
+            elif "名前: process_scores_with_assert" in prompt:
                 return json.dumps({
                     "question": "`process_scores_with_assert()` 関数内の `assert` 文は何を目的として記述されており、どのような条件を検証しているか説明してください。",
                     "axis": "構造軸（物理的内容）",
@@ -145,8 +170,74 @@ class MockLLMClient(LLMClient):
                     "is_passed": False
                 }, ensure_ascii=False)
 
-            # ② divide_with_raise に対する厳格採点
-            if "divide_with_raise" in prompt:
+            # ② __main__ エントリーポイント（呼び出し関係）に対する厳格採点
+            if "対象Chunk名: __main__" in prompt:
+                has_divide = any(kw in answer for kw in ["divide_with_raise", "ValueError", "TypeError", "0で割", "型"])
+                has_assert_call = any(kw in answer for kw in ["process_scores_with_assert", "AssertionError", "assert", "空リスト", "空の"])
+                has_order = any(kw in answer for kw in ["順番", "順序", "try", "except", "呼び出し", "流れ", "捕捉"])
+
+                score_divide = 40 if has_divide else 0
+                score_assert_call = 40 if has_assert_call else 0
+                score_order = 20 if has_order else 0
+                total_score = score_divide + score_assert_call + score_order
+                is_passed = total_score >= 70
+
+                misses = []
+                if not has_divide: misses.append("divide_with_raise呼び出し・例外の見落とし")
+                if not has_assert_call: misses.append("process_scores_with_assert呼び出し・例外の見落とし")
+                if not has_order: misses.append("呼び出し順序・エラーハンドリングの流れの説明不足")
+
+                feedback = "✅ 2つの関数がどう呼ばれ、例外がどう捕捉されているか正確に説明できています！" if is_passed else "呼び出されている関数の一部には触れられていますが、例外の捕捉や呼び出しの流れの説明が不足しています。\n💡 try-exceptで何を捕まえているか、どの順番で呼ばれているかに注目してみましょう。"
+
+                return json.dumps({
+                    "score": total_score,
+                    "score_details": [
+                        {"name": "divide_with_raise()の呼び出しと例外捕捉(ValueError/TypeError)", "score": score_divide, "max": 40, "reason": "divide_with_raiseの呼び出しと例外の説明ができています。" if has_divide else "divide_with_raiseの呼び出しや例外捕捉に関する記述がありません。"},
+                        {"name": "process_scores_with_assert()の呼び出しと例外捕捉(AssertionError)", "score": score_assert_call, "max": 40, "reason": "process_scores_with_assertの呼び出しと例外の説明ができています。" if has_assert_call else "process_scores_with_assertの呼び出しや例外捕捉に関する記述がありません。"},
+                        {"name": "try-exceptによる呼び出し順序・エラーハンドリングの流れ", "score": score_order, "max": 20, "reason": "呼び出しの順序や例外処理の流れに触れられています。" if has_order else "呼び出し順序やtry-exceptの流れに関する記述がありません。"}
+                    ],
+                    "miss_categories": misses,
+                    "feedback": feedback,
+                    "is_passed": is_passed
+                }, ensure_ascii=False)
+
+            # ②' モジュールの実行フロー（iter/next デモ等）に対する厳格採点
+            elif "対象Chunk名: モジュールの実行フロー" in prompt:
+                has_iter = any(kw in answer for kw in ["iter(", "イテレータ", "iterator"])
+                has_next = any(kw in answer for kw in ["next(", "1つずつ", "1回目", "取り出"])
+                has_stopiter = any(kw in answer for kw in ["StopIteration"])
+                has_for_relation = any(kw in answer for kw in ["for", "裏側", "自動的"])
+
+                score_iter = 25 if has_iter else 0
+                score_next = 25 if has_next else 0
+                score_stop = 25 if has_stopiter else 0
+                score_for = 25 if has_for_relation else 0
+                total_score = score_iter + score_next + score_stop + score_for
+                is_passed = total_score >= 70
+
+                misses = []
+                if not has_iter: misses.append("iter()の役割の見落とし")
+                if not has_next: misses.append("next()による逐次取り出しの見落とし")
+                if not has_stopiter: misses.append("StopIteration発生の見落とし")
+                if not has_for_relation: misses.append("forループとの対応関係の見落とし")
+
+                feedback = "✅ iter/nextの仕組みとforループとの対応を正確に把握できています！" if is_passed else "一部の処理には触れられていますが、iter・next・StopIteration・forループの対応関係のいずれかが抜けています。\n💡 「forループの裏側で何が起きているか」に注目して説明を補ってみましょう。"
+
+                return json.dumps({
+                    "score": total_score,
+                    "score_details": [
+                        {"name": "iter()でイテレータを生成する仕組み", "score": score_iter, "max": 25, "reason": "iter()の役割を説明できています。" if has_iter else "iter()に関する記述がありません。"},
+                        {"name": "next()による1件ずつの取り出しと呼び出し回数", "score": score_next, "max": 25, "reason": "next()による逐次取得を説明できています。" if has_next else "next()の逐次呼び出しに関する記述がありません。"},
+                        {"name": "要素が尽きた際のStopIteration発生", "score": score_stop, "max": 25, "reason": "StopIterationの発生に触れています。" if has_stopiter else "StopIterationに関する記述がありません。"},
+                        {"name": "forループとiter/nextの対応関係", "score": score_for, "max": 25, "reason": "forループとの対応関係を説明できています。" if has_for_relation else "forループとの対応関係に関する記述がありません。"}
+                    ],
+                    "miss_categories": misses,
+                    "feedback": feedback,
+                    "is_passed": is_passed
+                }, ensure_ascii=False)
+
+            # ③ divide_with_raise に対する厳格採点
+            elif "対象Chunk名: divide_with_raise" in prompt:
                 has_type = any(kw in answer for kw in ["isinstance", "型", "int", "float", "数値"])
                 has_zero = any(kw in answer for kw in ["0除算", "ゼロ", "b == 0", "bが0", "0で割"])
                 has_exc = any(kw in answer for kw in ["TypeError", "ValueError", "タイプエラー", "バリューエラー", "例外"])
@@ -187,8 +278,8 @@ class MockLLMClient(LLMClient):
                     "is_passed": is_passed
                 }, ensure_ascii=False)
 
-            # ③ process_scores_with_assert に対する厳格採点
-            elif "process_scores_with_assert" in prompt:
+            # ④ process_scores_with_assert に対する厳格採点
+            elif "対象Chunk名: process_scores_with_assert" in prompt:
                 has_assert_purpose = any(kw in answer for kw in ["内部", "デバッグ", "前提", "バグ", "開発"])
                 has_empty_check = any(kw in answer for kw in ["空", "len", "要素数", "長さ"])
                 has_calc = any(kw in answer for kw in ["平均", "合計", "sum", "割り算", "平均値", "除算"])
@@ -286,6 +377,8 @@ def build_evaluation_prompt(chunk: CodeChunk, question: str, user_answer: str, t
 
     return f"""あなたはソフトウェア開発のコード理解度を厳格かつ公正に評価するプロの技術コーチです。
 【タスク: 回答採点評価】
+
+対象Chunk名: {chunk.name}
 
 【対象コードChunk】
 ```python

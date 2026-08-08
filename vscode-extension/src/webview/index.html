@@ -4,516 +4,1029 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DeDoubt — Code Understanding Agent</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#0a0a12',
+              card: '#12131d',
+              panel: '#191a28',
+              border: '#23243a',
+              text: '#e7e7f4',
+              muted: '#8d8dae',
+              indigo: '#818cf8',
+              gold: '#fbbf24',
+              green: '#34d399',
+              amber: '#f59e0b',
+              red: '#f87171',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
   <!-- Mermaid.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
   <style>
-    :root {
-      --bg-primary: #0d1117;
-      --bg-secondary: #161b22;
-      --bg-card: #21262d;
-      --border-color: #30363d;
-      --text-main: #f0f6fc;
-      --text-muted: #8b949e;
-      --accent-blue: #58a6ff;
-      --accent-green: #3fb950;
-      --accent-red: #f85149;
-      --accent-amber: #d29922;
-      --accent-purple: #bc8cff;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg-primary);
-      color: var(--text-main);
-      line-height: 1.6;
-      padding: 24px;
-      max-width: 960px;
-      margin: 0 auto;
+      background:
+        radial-gradient(ellipse 900px 500px at 15% -10%, rgba(129,140,248,0.10), transparent 60%),
+        radial-gradient(ellipse 700px 500px at 100% 10%, rgba(251,191,36,0.05), transparent 60%),
+        #0a0a12;
+      color: #e7e7f4;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
     }
-
-    /* 共通コンテナ & カード */
-    .card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .header-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 12px;
-    }
-    .header-title {
-      font-size: 1.4rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--accent-blue);
-    }
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      background-color: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-    }
-
-    /* プログレスバー */
-    .progress-bar-container {
-      width: 100%;
-      height: 8px;
-      background-color: var(--bg-secondary);
-      border-radius: 4px;
-      overflow: hidden;
-      margin: 12px 0 20px 0;
-    }
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
-      width: 0%;
-      transition: width 0.3s ease;
-    }
-
-    /* メタ情報タグ */
-    .meta-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-    .meta-item {
-      background: var(--bg-secondary);
-      padding: 10px 14px;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-    }
-    .meta-label { font-size: 0.75rem; color: var(--text-muted); }
-    .meta-value { font-size: 1rem; font-weight: 600; color: var(--text-main); }
-
-    /* 質問テキスト */
-    .question-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      line-height: 1.5;
-      margin-bottom: 16px;
-      color: var(--text-main);
-    }
-
-    /* Mermaid コンテナ */
-    .mermaid-box {
-      background-color: #0d1117;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 16px;
-      text-align: center;
-      overflow-x: auto;
-      margin-bottom: 16px;
-    }
-
-    /* アコーディオン */
-    details {
-      background-color: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 10px 14px;
-      margin-bottom: 16px;
-    }
-    summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--accent-blue);
-      outline: none;
-    }
-    .details-content { margin-top: 12px; }
-
-    /* コードプレビュー */
-    pre code {
-      display: block;
-      background-color: #0d1117;
-      padding: 14px;
-      border-radius: 6px;
-      font-family: "Fira Code", Consolas, Monaco, monospace;
-      font-size: 0.9rem;
-      overflow-x: auto;
-      color: #e6edf3;
-      border: 1px solid var(--border-color);
-    }
-
-    /* 2回目以降の着眼点ガイド */
-    .hint-box {
-      background-color: rgba(210, 153, 34, 0.1);
-      border: 1px solid var(--accent-amber);
-      border-radius: 6px;
-      padding: 14px;
-      margin-bottom: 16px;
-    }
-    .hint-title { font-weight: 700; color: var(--accent-amber); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-
-    /* テキストエリア & ボタン */
-    textarea {
-      width: 100%;
-      height: 140px;
-      background-color: var(--bg-secondary);
-      color: var(--text-main);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 12px;
-      font-family: inherit;
-      font-size: 0.95rem;
-      resize: vertical;
-      margin-bottom: 16px;
-    }
-    textarea:focus { outline: none; border-color: var(--accent-blue); }
-
-    .btn-group { display: flex; gap: 12px; }
-    .btn {
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      cursor: pointer;
-      border: none;
-      transition: background-color 0.2s ease, transform 0.1s ease;
-    }
-    .btn-primary { background-color: #238636; color: #ffffff; flex: 3; }
-    .btn-primary:hover { background-color: #2ea043; }
-    .btn-primary:disabled { background-color: #1a4e25; color: #8b949e; cursor: not-allowed; }
-    .btn-secondary { background-color: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); flex: 1; }
-    .btn-secondary:hover { background-color: var(--border-color); }
-
-    /* スコアカード */
-    .score-banner {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background-color: var(--bg-secondary);
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
-      border: 1px solid var(--border-color);
-    }
-    .score-number { font-size: 2.8rem; font-weight: 800; color: var(--accent-blue); }
-    .status-badge {
-      font-size: 1.2rem;
-      font-weight: 700;
-      padding: 8px 16px;
-      border-radius: 6px;
-    }
-    .status-passed { background-color: rgba(63, 185, 80, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
-    .status-failed { background-color: rgba(248, 81, 73, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); }
-
-    /* スコア詳細テーブル */
-    .rubric-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 12px;
-    }
-    .rubric-table th, .rubric-table td {
-      text-align: left;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .rubric-table th { background-color: var(--bg-secondary); color: var(--text-muted); font-size: 0.85rem; }
-
-    .tag {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      background-color: rgba(248, 81, 73, 0.2);
-      color: var(--accent-red);
-      border: 1px solid var(--accent-red);
-      margin-right: 6px;
-    }
-
+    .font-display { font-family: 'Space Grotesk', -apple-system, sans-serif; letter-spacing: 0.01em; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #23243a; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #34355a; }
     .hidden { display: none !important; }
+
+    /* ── コード行ハイライト ── */
+    .code-line { display: flex; padding: 2px 4px; border-radius: 2px; }
+    .code-line-num { width: 32px; color: #55567a; user-select: none; text-align: right; padding-right: 12px; font-size: 11px; }
+    .code-line-content { flex: 1; white-space: pre; }
+    .code-line-highlight { background-color: rgba(245, 158, 11, 0.12); border-left: 3px solid #f59e0b; }
+    .code-line-highlight .code-line-num { color: #fbbf24; font-weight: bold; }
+
+    /* ── ホバーポップオーバー ── */
+    .popover-wrapper { position: relative; display: inline-block; }
+    .popover-wrapper .popover-content {
+      visibility: hidden;
+      width: 320px;
+      background-color: #191a28;
+      color: #e7e7f4;
+      text-align: left;
+      border-radius: 10px;
+      padding: 12px;
+      position: absolute;
+      z-index: 50;
+      bottom: 125%;
+      left: 0;
+      opacity: 0;
+      transition: all 0.15s ease-in-out;
+      box-shadow: 0 12px 30px -8px rgba(0,0,0,0.7);
+      border: 1px solid #2c2d48;
+      font-size: 11px;
+    }
+    .popover-wrapper:hover .popover-content,
+    .popover-wrapper:focus-within .popover-content {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* ── 星図マップ ── */
+    @keyframes starPulse {
+      0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px currentColor); }
+      50% { opacity: 0.5; filter: drop-shadow(0 0 2px currentColor); }
+    }
+    @keyframes starTwinkle {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    .node-current circle.node-halo { animation: starPulse 2.2s ease-in-out infinite; }
+    .node-bg-star { animation: starTwinkle 3s ease-in-out infinite; }
+    .constellation-line {
+      stroke-dasharray: 4 4;
+      animation: dashScroll 20s linear infinite;
+    }
+    @keyframes dashScroll { to { stroke-dashoffset: -200; } }
+
+    /* ── 対話スレッド (チャット形式) ── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .msg { display: flex; gap: 10px; margin-bottom: 16px; align-items: flex-start; animation: fadeInUp 0.3s ease; }
+    .msg-user { flex-direction: row-reverse; }
+    .msg-avatar {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; background: #191a28; border: 1px solid #2c2d48;
+      margin-top: 2px;
+    }
+    .msg-bubble { max-width: 86%; border-radius: 14px; padding: 12px 15px; font-size: 13px; line-height: 1.75; }
+    .msg-bubble-ai { background: #141522; border: 1px solid #23243a; border-top-left-radius: 3px; }
+    .msg-bubble-user { background: #1c2a4d; border: 1px solid #2d417a; border-top-right-radius: 3px; color: #dde5ff; }
+    .msg-bubble-system { background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.28); border-top-left-radius: 3px; }
+    .msg-bubble-result { background: #141522; border: 1px solid #2c2d48; }
+
+    .typing-dots { display: inline-flex; gap: 4px; padding: 4px 0; }
+    .typing-dots span {
+      width: 6px; height: 6px; border-radius: 50%; background: #818cf8;
+      animation: typingBounce 1.2s infinite ease-in-out;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30% { transform: translateY(-4px); opacity: 1; }
+    }
+
+    #thread-messages { scroll-behavior: smooth; }
+
+    /* ── HUD リング ── */
+    .hud-ring-track { stroke: #23243a; }
+    .hud-ring-progress { stroke: #818cf8; transition: stroke-dashoffset 0.6s ease; }
+
+    details.rubric-details summary { cursor: pointer; list-style: none; }
+    details.rubric-details summary::-webkit-details-marker { display: none; }
+    details.rubric-details[open] .rubric-chevron { transform: rotate(90deg); }
+    .rubric-chevron { transition: transform 0.15s ease; display: inline-block; }
+
+    /* ── Mermaid図: 枠に収まるよう自動フィット（縮小はするが拡大はしない） ── */
+    .mermaid-fit-box svg {
+      width: auto !important;
+      height: auto !important;
+      max-width: 100% !important;
+      max-height: 240px !important;
+    }
+    /* 拡大表示モーダル内は自動フィット制約を外し、自然なサイズで表示する */
+    #diagram-modal-body svg {
+      width: auto !important;
+      height: auto !important;
+      max-width: 88vw !important;
+      max-height: 80vh !important;
+    }
+    #diagram-modal-body.dragging { cursor: grabbing !important; }
+    #diagram-modal-body pre.mermaid { user-select: none; }
   </style>
 </head>
-<body>
+<body class="bg-brand-bg text-brand-text min-h-screen p-6 max-w-[1400px] mx-auto flex flex-col justify-between">
 
-  <!-- ヘッダー -->
-  <div class="header-bar">
-    <div class="header-title">🧠 DeDoubt — コード理解サポート</div>
-    <div class="badge" id="engine-badge">Engine: Connecting...</div>
-  </div>
-
-  <!-- 【ビュー1: 初期ロード / 準備中】 -->
-  <div id="view-init" class="card">
-    <h2>📁 ファイル理解度テストの立ち上げ</h2>
-    <p style="color: var(--text-muted); margin-top: 8px;">エディタで選択されたファイルを解析中...</p>
-    <div style="margin-top: 20px;">
-      <p id="init-file-path" style="font-family: monospace; color: var(--accent-blue);"></p>
-    </div>
-  </div>
-
-  <!-- 【ビュー2: 質問・回答入力画面】 -->
-  <div id="view-question" class="card hidden">
-    <!-- プログレスバー -->
-    <div class="progress-bar-container">
-      <div id="progress-fill" class="progress-bar-fill"></div>
-    </div>
-
-    <!-- メタ情報 -->
-    <div class="meta-grid">
-      <div class="meta-item">
-        <div class="meta-label">Chunk進捗</div>
-        <div class="meta-value" id="chunk-meta">Chunk 1 / 2</div>
+  <!-- ──────────────────────────────────────────
+      ヘッダーバー
+  ────────────────────────────────────────── -->
+  <header class="flex justify-between items-center pb-4 mb-6 border-b border-brand-border">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-indigo-500/15 text-indigo-300 flex items-center justify-center font-bold text-lg border border-indigo-400/30">
+        ✨
       </div>
-      <div class="meta-item">
-        <div class="meta-label">理解軸</div>
-        <div class="meta-value" id="axis-meta">構造軸</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">難易度 / 目標</div>
-        <div class="meta-value" id="diff-meta">標準 (目標 70点)</div>
-      </div>
-    </div>
-
-    <!-- 質問タイトル -->
-    <div class="question-title" id="question-text">質問を読み込んでいます...</div>
-
-    <!-- Mermaid 参考図 -->
-    <div id="mermaid-container" class="mermaid-box hidden">
-      <div id="mermaid-graph"></div>
-    </div>
-
-    <!-- コード参照アコーディオン -->
-    <details>
-      <summary>🔍 対象コードを確認 (<span id="code-chunk-name">chunk</span>)</summary>
-      <div class="details-content">
-        <pre><code id="code-snippet"># Code snippet</code></pre>
-      </div>
-    </details>
-
-    <!-- ★ 2回目以降の着眼点ガイド (再挑戦時のみ表示) -->
-    <div id="hint-guide-container" class="hint-box hidden">
-      <div class="hint-title">💡 再回答のための着眼点ガイド (丸パクリ防止)</div>
-      <p id="last-feedback-text" style="font-size: 0.9rem; color: var(--text-main); margin-bottom: 8px;"></p>
-      <div id="miss-tags-container" style="margin-bottom: 10px;"></div>
-      <div style="font-size: 0.85rem; color: var(--text-muted);">
-        <b>【スコアを伸ばすための3つの視点】</b><br>
-        1. 🔍 <b>注目行:</b> 対象コード内の <code>if</code>, <code>assert</code>, <code>raise</code>, <code>return</code> の行を確認。<br>
-        2. ❓ <b>見落とし要素:</b> 前回の見落としタグ（例外名や戻り値など）を足す。<br>
-        3. 🗣️ <b>具体化:</b> 「どんな条件のとき」「何が発生するか/何を返すか」まで説明する。
-      </div>
-    </div>
-
-    <!-- 回答入力 -->
-    <h4 style="margin-bottom: 8px;">✏️ あなたの回答</h4>
-    <textarea id="answer-input" placeholder="例: この関数は数値aとbを受け取り、0除算や型の不正をチェックした上で割り算の結果を返します..."></textarea>
-
-    <div class="btn-group">
-      <button id="btn-submit" class="btn btn-primary">📤 回答を提出</button>
-      <button id="btn-skip" class="btn btn-secondary">スキップ</button>
-    </div>
-  </div>
-
-  <!-- 【ビュー3: 採点評価中】 -->
-  <div id="view-evaluating" class="card hidden" style="text-align: center; padding: 40px;">
-    <h2>⏳ コーチが回答を採点中...</h2>
-    <p style="color: var(--text-muted); margin-top: 12px;">項目別スコアリングと厳格な減点判定を行っています。</p>
-  </div>
-
-  <!-- 【ビュー4: 採点結果画面】 -->
-  <div id="view-result" class="card hidden">
-    <div class="score-banner">
       <div>
-        <div style="font-size: 0.85rem; color: var(--text-muted);">理解度スコア</div>
-        <div class="score-number" id="result-score">0</div>
+        <h1 class="text-lg font-bold font-display text-brand-text tracking-wide">DeDoubt</h1>
+        <p class="text-xs text-brand-muted">理解の星図 — Active Recall Constellation</p>
       </div>
-      <div id="status-badge-container"></div>
     </div>
 
-    <h4 style="margin-bottom: 8px;">✏️ あなたの提出回答</h4>
-    <blockquote id="submitted-answer-text" style="border-left: 3px solid var(--accent-blue); padding-left: 12px; color: var(--text-muted); margin-bottom: 20px;"></blockquote>
+    <div class="flex items-center gap-4">
+      <!-- 全体進捗HUDリング -->
+      <div id="hud-ring-wrapper" class="flex items-center gap-2 hidden">
+        <svg width="34" height="34" viewBox="0 0 34 34" class="-rotate-90">
+          <circle cx="17" cy="17" r="14" fill="none" stroke-width="3" class="hud-ring-track"/>
+          <circle id="hud-ring-progress" cx="17" cy="17" r="14" fill="none" stroke-width="3"
+            stroke-linecap="round" class="hud-ring-progress" stroke-dasharray="88" stroke-dashoffset="88"/>
+        </svg>
+        <span id="hud-ring-label" class="text-[11px] text-brand-muted leading-tight">0/0<br>完了</span>
+      </div>
 
-    <h4 style="margin-bottom: 8px;">📋 項目別採点詳細</h4>
-    <table class="rubric-table">
-      <thead>
-        <tr>
-          <th>評価観点</th>
-          <th>得点</th>
-          <th>採点理由・コメント</th>
-        </tr>
-      </thead>
-      <tbody id="rubric-tbody"></tbody>
-    </table>
+      <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-brand-card border border-brand-border text-brand-muted">
+        Engine: <span id="engine-badge" class="text-indigo-300 font-semibold">Connecting...</span>
+      </span>
+      <span id="file-path-badge" class="text-xs font-mono text-brand-muted truncate max-w-[260px]" title="">
+        📁 読み込み中...
+      </span>
+    </div>
+  </header>
 
-    <div style="margin-top: 20px;">
-      <h4 style="margin-bottom: 8px;">💬 コーチからのアドバイス</h4>
-      <div id="coach-advice-box" style="padding: 12px; border-radius: 6px; background-color: var(--bg-secondary); border: 1px solid var(--border-color);"></div>
+  <!-- ──────────────────────────────────────────
+      ビュー1: 初期ロード / 準備中
+  ────────────────────────────────────────── -->
+  <div id="view-init" class="flex-1 flex flex-col items-center justify-center py-20 bg-brand-card rounded-xl border border-brand-border">
+    <div class="relative w-12 h-12 mb-5">
+      <div class="absolute inset-0 rounded-full border-2 border-indigo-400/20"></div>
+      <div class="absolute inset-0 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin"></div>
+      <div class="absolute inset-0 flex items-center justify-center text-sm">✨</div>
+    </div>
+    <h2 class="text-base font-semibold font-display text-brand-text">星図を構築中...</h2>
+    <p class="text-xs text-brand-muted mt-2">コードをASTで分解し、学習ノードを星として配置しています</p>
+  </div>
+
+  <!-- ──────────────────────────────────────────
+      ビュー2 & ビュー4: 左右2カラム スプリットレイアウト
+  ────────────────────────────────────────── -->
+  <div id="view-workspace" class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 hidden">
+
+    <!-- ───────────────────────────────────────
+        左パネル: 星図マップ ＆ コード構造図解 (5 cols)
+    ─────────────────────────────────────── -->
+    <div class="lg:col-span-5 flex flex-col gap-5">
+
+      <!-- 1. 学習の星図マップ -->
+      <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 font-display">
+            🌌 学習の星図
+          </span>
+          <span class="text-[11px] text-brand-muted">Constellation Map</span>
+        </div>
+        <div id="constellation-box" class="bg-brand-bg/60 rounded-lg border border-brand-border overflow-x-auto flex items-center justify-center min-h-[100px]">
+          <span class="text-brand-muted italic text-xs p-4">星図を準備中...</span>
+        </div>
+        <div class="flex items-center gap-4 mt-3 px-1 text-[10px] text-brand-muted">
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-brand-gold inline-block"></span>合格</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-brand-red inline-block"></span>要復習</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>現在地</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-zinc-600 inline-block"></span>未探索</span>
+        </div>
+      </div>
+
+      <!-- 2. Mermaid フローチャート図解 -->
+      <div class="bg-brand-card border border-brand-border rounded-xl p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-3">
+          <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5 font-display">
+            📊 構造フローチャート
+          </span>
+          <div class="flex items-center gap-2">
+            <button id="btn-expand-diagram" class="text-[11px] px-2 py-0.5 rounded bg-brand-panel hover:bg-zinc-700 text-indigo-200 border border-indigo-400/30 transition-colors" title="拡大表示">
+              🔍 拡大表示
+            </button>
+            <span class="text-[11px] text-brand-muted">Mermaid.js</span>
+          </div>
+        </div>
+        <div id="mermaid-box" class="mermaid-fit-box bg-brand-bg rounded-lg p-3 border border-brand-border overflow-auto min-h-[140px] max-h-[260px] flex items-center justify-center text-xs">
+          <span class="text-brand-muted italic">図解レンダリング中...</span>
+        </div>
+      </div>
+
+      <!-- 3. 対象コードセグメント (動的行ハイライト対応) -->
+      <div class="bg-brand-card border border-brand-border rounded-xl p-4 flex-1 flex flex-col">
+        <div class="flex justify-between items-center mb-3">
+          <span class="text-xs font-bold text-zinc-300 flex items-center gap-1.5 font-display">
+            🔍 対象コードセグメント
+          </span>
+          <span id="code-chunk-label" class="text-xs font-mono text-indigo-300">chunk</span>
+        </div>
+        <div id="code-snippet-container" class="bg-brand-bg border border-brand-border rounded-lg p-3 text-xs font-mono text-zinc-200 overflow-x-auto flex-1 leading-relaxed">
+          <!-- 行番号 ＆ 動的ハイライト付きコード -->
+        </div>
+      </div>
+
     </div>
 
-    <div class="btn-group" style="margin-top: 24px;">
-      <button id="btn-next-chunk" class="btn btn-primary">▶️ 次のChunkへ進む</button>
-      <button id="btn-retry-chunk" class="btn btn-secondary">🔄 もう一度回答する (学び直し)</button>
+    <!-- ───────────────────────────────────────
+        右パネル: ソクラテス対話スレッド (7 cols)
+    ─────────────────────────────────────── -->
+    <div class="lg:col-span-7 flex flex-col bg-brand-card border border-brand-border rounded-xl shadow-sm overflow-hidden">
+
+      <!-- スレッドヘッダー: メタタグ ＆ 動的調整コントロール -->
+      <div class="flex flex-wrap justify-between items-center px-5 py-3 border-b border-brand-border gap-2 bg-brand-panel/40">
+        <div class="flex items-center gap-2">
+          <span id="chunk-progress-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-400/20">
+            Chunk 1 / 1
+          </span>
+          <span id="axis-badge" class="text-xs text-brand-muted font-medium">
+            軸: 構造軸
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select id="select-difficulty" class="bg-brand-bg text-brand-text text-xs border border-brand-border rounded px-2 py-1 focus:outline-none focus:border-indigo-400">
+            <option value="基礎">難易度: 基礎</option>
+            <option value="標準" selected>難易度: 標準</option>
+            <option value="応用">難易度: 応用</option>
+          </select>
+
+          <select id="select-target-score" class="bg-brand-bg text-brand-text text-xs border border-brand-border rounded px-2 py-1 focus:outline-none focus:border-indigo-400">
+            <option value="60">目標 60点</option>
+            <option value="70" selected>目標 70点</option>
+            <option value="85">目標 85点</option>
+            <option value="90">目標 90点</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 対話スレッド本体 -->
+      <div id="thread-messages" class="flex-1 overflow-y-auto px-5 py-5" style="max-height: 640px;"></div>
+
+      <!-- コンポーズバー (回答入力エリア) -->
+      <div id="compose-bar" class="border-t border-brand-border p-4 bg-brand-panel/30">
+        <label class="block text-xs font-semibold text-brand-muted mb-2">
+          ✏️ あなたの回答（コード不要・自然言語で説明）
+        </label>
+        <textarea
+          id="answer-input"
+          class="w-full h-24 bg-brand-bg text-brand-text border border-brand-border rounded-lg p-3 text-sm focus:outline-none focus:border-indigo-400 transition-colors resize-none mb-3"
+          placeholder="例: この関数は数値aとbを受け取り、0除算や型の不正をチェックした上で割り算の結果を返します..."
+        ></textarea>
+        <div class="flex gap-3">
+          <button id="btn-submit" class="flex-1 py-2.5 px-4 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
+            📤 回答を提出
+          </button>
+          <button id="btn-skip" class="py-2.5 px-5 bg-brand-panel hover:bg-zinc-700 text-zinc-300 font-semibold text-sm rounded-lg border border-brand-border transition-colors">
+            スキップ
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ──────────────────────────────────────────
+      ビュー5: 全セッション完了 ＆ 過去分析サマリー画面
+  ────────────────────────────────────────── -->
+  <div id="view-finish" class="flex-1 flex flex-col py-10 bg-brand-card rounded-xl border border-brand-border p-8 hidden">
+    <div class="text-center mb-8">
+      <div class="w-12 h-12 rounded-full bg-brand-gold/15 text-brand-gold flex items-center justify-center font-bold text-2xl mx-auto mb-3 border border-brand-gold/30">
+        🌠
+      </div>
+      <h2 class="text-xl font-bold font-display text-brand-text mb-2">星図がすべて灯りました！</h2>
+      <p class="text-xs text-brand-muted max-w-md mx-auto leading-relaxed">
+        ファイルの全コード構造・仕様に対するアクティブラーニング結果が記録されました。
+      </p>
+    </div>
+
+    <!-- 📊 過去全セッション分析サマリー -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 text-left">
+      <div class="bg-brand-bg border border-brand-border rounded-lg p-5">
+        <h3 class="text-xs font-bold text-brand-amber uppercase tracking-wider mb-3 flex items-center gap-1.5 font-display">
+          ⚠️ 過去に頻出した全体苦手タグ
+        </h3>
+        <div id="analytics-weakness-list" class="flex flex-wrap gap-2 text-xs">
+          <span class="text-brand-muted italic">分析データを読み込み中...</span>
+        </div>
+      </div>
+
+      <div class="bg-brand-bg border border-brand-border rounded-lg p-5">
+        <h3 class="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-3 flex items-center gap-1.5 font-display">
+          📋 Chunk別 前回の習熟度と要復習マーク
+        </h3>
+        <div id="analytics-chunk-list" class="space-y-2 text-xs">
+          <span class="text-brand-muted italic">分析データを読み込み中...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <button id="btn-restart" class="py-2.5 px-8 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
+        🔄 再度理解テストを開始（弱点克服）
+      </button>
     </div>
   </div>
 
-  <!-- 【ビュー5: 全セッション完了画面】 -->
-  <div id="view-finish" class="card hidden" style="text-align: center; padding: 40px;">
-    <h1 style="color: var(--accent-green); margin-bottom: 12px;">🎉 全Chunk完了！</h1>
-    <p style="color: var(--text-main); font-size: 1.1rem; margin-bottom: 24px;">指定されたファイルのすべてのコードChunkの理解度チェックが完了しました。</p>
-    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">全回答ログと成長データは SQLite <code>dedoubt.db</code> に安全に記録されています。</p>
-    <button id="btn-restart" class="btn btn-primary" style="max-width: 300px; margin: 0 auto;">🔄 最初のファイルで再テスト</button>
+  <!-- ──────────────────────────────────────────
+      トースト通知
+  ────────────────────────────────────────── -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-brand-panel border border-brand-border text-brand-text text-xs px-4 py-2.5 rounded-lg shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-50"></div>
+
+  <!-- ──────────────────────────────────────────
+      マーメイド図 拡大表示モーダル
+  ────────────────────────────────────────── -->
+  <div id="diagram-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center p-6" style="background: rgba(6,6,12,0.82);">
+    <div class="bg-brand-card border border-brand-border rounded-xl shadow-2xl max-w-[95vw] max-h-[92vh] w-full flex flex-col overflow-hidden">
+      <div class="flex justify-between items-center px-5 py-3 border-b border-brand-border flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-bold text-brand-text font-display">📊 構造フローチャート（拡大表示）</span>
+          <span class="text-[10px] text-brand-muted hidden sm:inline">🖱️ ドラッグで移動・ホイールでズーム・ダブルクリックでリセット</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-reset-diagram-zoom" class="text-[11px] px-2 py-0.5 rounded bg-brand-panel hover:bg-zinc-700 text-brand-muted border border-brand-border transition-colors">🔄 リセット</button>
+          <button id="btn-close-diagram-modal" class="text-brand-muted hover:text-brand-text text-lg leading-none px-2">✕</button>
+        </div>
+      </div>
+      <div id="diagram-modal-body" class="p-6 overflow-hidden flex items-center justify-center flex-1" style="cursor: grab;"></div>
+    </div>
   </div>
 
   <script>
-    // VS Code API オブジェクトの取得
-    const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
     const API_BASE = "http://127.0.0.1:8000";
+    const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 
-    // アプリケーション状態
     let state = {
-      filePath: "",
+      filePath: "C:\\Users\\owner\\Documents\\lab\\DeDoughtスプレッドシート\\検証用ファイル\\assert-and-raise.py",
       targetScore: 70,
+      difficulty: "標準",
       sessionData: null,
       currentChunkIdx: 0,
       currentQuestion: null,
-      lastEvalResult: null
+      userAnswer: "",
+      lastEvalForChunk: null,
+      projectAnalytics: null,
+      chunkResults: {} // chunkIdx -> { passed: bool, score: number }
     };
 
-    // 初期化
-    mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
-    checkHealth();
+    document.addEventListener("DOMContentLoaded", () => {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        securityLevel: 'strict',
+        themeVariables: { fontSize: '11px' },
+        flowchart: { nodeSpacing: 22, rankSpacing: 26, padding: 6, curve: 'basis' },
+        sequence: { actorMargin: 44, messageMargin: 18, boxMargin: 6, noteMargin: 6, mirrorActors: false }
+      });
+      checkHealth();
 
-    // 疎通チェック
-    async function checkHealth() {
-      try {
-        const res = await fetch(`${API_BASE}/api/health`);
-        const data = await res.json();
-        document.getElementById('engine-badge').innerText = `Engine: ${data.engine}`;
-      } catch(e) {
-        document.getElementById('engine-badge').innerText = `Engine: Disconnected (Port 8000)`;
+      document.getElementById('select-target-score').addEventListener('change', (e) => {
+        state.targetScore = parseInt(e.target.value, 10);
+      });
+      document.getElementById('select-difficulty').addEventListener('change', (e) => {
+        state.difficulty = e.target.value;
+        loadQuestion();
+      });
+
+      window.addEventListener('message', (event) => {
+        const message = event.data;
+        if (message.command === 'initSession' || message.command === 'switchFile') {
+          if (message.filePath && message.filePath !== state.filePath) {
+            state.filePath = message.filePath;
+            state.targetScore = message.targetScore || state.targetScore;
+            state.lastEvalForChunk = null;
+            state.chunkResults = {};
+            startSession();
+          }
+        }
+      });
+
+      if (vscode) {
+        // 拡張機能側へ「Webviewの読み込みが完了した」ことを通知するハンドシェイク
+        vscode.postMessage({ command: 'ready' });
       }
-    }
 
-    // VS Code からのメッセージ受信用
-    window.addEventListener('message', event => {
-      const message = event.data;
-      if (message.command === 'initSession') {
-        state.filePath = message.filePath;
-        state.targetScore = message.targetScore || 70;
-        document.getElementById('init-file-path').innerText = state.filePath;
+      if (!vscode) {
         startSession();
       }
     });
 
-    // 1. セッション開始 API
+    // ── トースト通知 ──
+    let toastTimer = null;
+    function showToast(text) {
+      const el = document.getElementById('toast');
+      el.innerText = text;
+      el.classList.remove('opacity-0', 'pointer-events-none');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.classList.add('opacity-0', 'pointer-events-none');
+      }, 2200);
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Mermaid図を指定コンテナへ描画する共通ヘルパー（通常表示・拡大モーダルの両方から利用）
+    async function renderMermaidInto(container, diagramText) {
+      if (!diagramText) {
+        container.innerHTML = `<span class="text-brand-muted italic">図解なし</span>`;
+        return;
+      }
+      try {
+        const cleanDiagram = diagramText.replace(/```mermaid/g, '').replace(/```/g, '').trim();
+        const pre = document.createElement('pre');
+        pre.className = 'mermaid';
+        pre.textContent = cleanDiagram;
+        container.innerHTML = '';
+        container.appendChild(pre);
+        await mermaid.run({ nodes: [pre] });
+
+        // MermaidはSVGに width="100%" のみを付与し height を省略するため、
+        // CSSの width:auto/height:auto と組み合わさると自然サイズが確定できずゼロになることがある。
+        // viewBoxから自然サイズをSVG自身の属性として明示し、CSS側の縮小フィットが正しく効くようにする。
+        const svgEl = container.querySelector('svg');
+        if (svgEl) {
+          const viewBox = svgEl.getAttribute('viewBox');
+          if (viewBox) {
+            const parts = viewBox.trim().split(/\s+/).map(Number);
+            if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+              svgEl.setAttribute('width', parts[2]);
+              svgEl.setAttribute('height', parts[3]);
+            }
+          }
+        }
+      } catch(e) {
+        container.innerHTML = `<pre class="text-[11px] text-brand-amber text-left">${escapeHtml(diagramText)}</pre>`;
+      }
+    }
+
+    // ── 拡大表示モーダルのパン/ズーム ──
+    let diagramZoom = { scale: 1, x: 0, y: 0 };
+    let diagramDrag = null;
+
+    function applyDiagramTransform() {
+      const target = document.querySelector('#diagram-modal-body pre.mermaid');
+      if (!target) return;
+      target.style.transform = `translate(${diagramZoom.x}px, ${diagramZoom.y}px) scale(${diagramZoom.scale})`;
+      target.style.transformOrigin = 'center center';
+    }
+
+    function resetDiagramZoom() {
+      diagramZoom = { scale: 1, x: 0, y: 0 };
+      applyDiagramTransform();
+    }
+
+    function openDiagramModal() {
+      if (!state.currentQuestion || !state.currentQuestion.mermaid_diagram) {
+        showToast('表示できる図がありません');
+        return;
+      }
+      document.getElementById('diagram-modal').classList.remove('hidden');
+      resetDiagramZoom();
+      renderMermaidInto(document.getElementById('diagram-modal-body'), state.currentQuestion.mermaid_diagram)
+        .then(() => applyDiagramTransform());
+    }
+
+    function closeDiagramModal() {
+      document.getElementById('diagram-modal').classList.add('hidden');
+      diagramDrag = null;
+    }
+
+    (function setupDiagramPanZoom() {
+      const modalBody = document.getElementById('diagram-modal-body');
+
+      modalBody.addEventListener('wheel', (e) => {
+        if (document.getElementById('diagram-modal').classList.contains('hidden')) return;
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+        diagramZoom.scale = Math.min(5, Math.max(0.4, diagramZoom.scale * factor));
+        applyDiagramTransform();
+      }, { passive: false });
+
+      modalBody.addEventListener('mousedown', (e) => {
+        diagramDrag = { startX: e.clientX, startY: e.clientY, origX: diagramZoom.x, origY: diagramZoom.y };
+        modalBody.classList.add('dragging');
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!diagramDrag) return;
+        diagramZoom.x = diagramDrag.origX + (e.clientX - diagramDrag.startX);
+        diagramZoom.y = diagramDrag.origY + (e.clientY - diagramDrag.startY);
+        applyDiagramTransform();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!diagramDrag) return;
+        diagramDrag = null;
+        modalBody.classList.remove('dragging');
+      });
+
+      modalBody.addEventListener('dblclick', () => resetDiagramZoom());
+      document.getElementById('btn-reset-diagram-zoom').addEventListener('click', resetDiagramZoom);
+    })();
+
+    // ── 星図マップ描画 ──
+    // このファイルを過去にテスト済みか（2回目以降のセッションか）
+    function hasAnyFileHistory() {
+      return !!(state.projectAnalytics && state.projectAnalytics.chunk_summary
+        && Object.keys(state.projectAnalytics.chunk_summary).length > 0);
+    }
+
+    // その星（Chunk）が過去に一度でも回答されたことがあるか（今回のセッション内 or 過去セッション）
+    function isChunkVisited(idx, chunk) {
+      if (state.chunkResults[idx]) return true;
+      const summary = state.projectAnalytics && state.projectAnalytics.chunk_summary
+        ? state.projectAnalytics.chunk_summary[chunk.name] : null;
+      return !!summary;
+    }
+
+    // 星をクリックして過去に取り組んだChunkへジャンプする（初回セッションでは無効。新しい質問をその場で生成し直す）
+    function jumpToChunk(idx) {
+      if (!state.sessionData || idx === state.currentChunkIdx) return;
+      if (!hasAnyFileHistory()) return;
+      const chunk = state.sessionData.chunks[idx];
+      if (!isChunkVisited(idx, chunk)) return;
+
+      state.currentChunkIdx = idx;
+      state.lastEvalForChunk = null;
+      loadQuestion();
+    }
+
+    function renderConstellation() {
+      const box = document.getElementById('constellation-box');
+      if (!state.sessionData) return;
+      const chunks = state.sessionData.chunks;
+      const n = chunks.length;
+      const width = Math.max(320, n * 90);
+      const height = 130;
+      const paddingX = 45;
+      const usableWidth = width - paddingX * 2;
+      const clickable = hasAnyFileHistory();
+
+      const points = chunks.map((chunk, i) => {
+        const x = n <= 1 ? width / 2 : paddingX + (usableWidth * i) / (n - 1);
+        const y = height / 2 + Math.sin(i * 1.3) * 28;
+        return { x, y, chunk, i };
+      });
+
+      // Chunk名 → インデックスの対応（呼び出し関係のエッジ生成に使用）
+      const nameToIndex = {};
+      chunks.forEach((c, i) => { nameToIndex[c.name] = i; });
+
+      // 星図の線 = 実際の呼び出し関係（parser.pyが検出した chunk.calls）のみを結ぶ
+      // 隣接していない星同士は弧を描いて視覚的に区別する
+      let linesHtml = '';
+      chunks.forEach((chunk, i) => {
+        (chunk.calls || []).forEach(calleeName => {
+          const j = nameToIndex[calleeName];
+          if (j === undefined) return;
+          const p1 = points[i], p2 = points[j];
+          const midX = (p1.x + p2.x) / 2;
+          const dist = Math.abs(p1.x - p2.x);
+          const curveY = Math.min(p1.y, p2.y) - Math.max(16, dist * 0.28);
+          linesHtml += `<path d="M ${p1.x} ${p1.y} Q ${midX} ${curveY} ${p2.x} ${p2.y}"
+            fill="none" stroke="#4c4d78" stroke-width="1.5" class="constellation-line" marker-end="url(#star-arrow)" />`;
+        });
+      });
+
+      // 背景の装飾的な小星
+      let bgStars = '';
+      for (let i = 0; i < 18; i++) {
+        const bx = (Math.sin(i * 12.9898) * 0.5 + 0.5) * width;
+        const by = (Math.sin(i * 78.233) * 0.5 + 0.5) * height;
+        bgStars += `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="0.8" fill="#3f4066" class="node-bg-star" style="animation-delay:${(i % 5) * 0.4}s" />`;
+      }
+
+      let nodesHtml = '';
+      points.forEach(({ x, y, chunk, i }) => {
+        const summary = state.projectAnalytics && state.projectAnalytics.chunk_summary
+          ? state.projectAnalytics.chunk_summary[chunk.name] : null;
+        const localResult = state.chunkResults[i];
+
+        let status = 'future';
+        if (i < state.currentChunkIdx || localResult) {
+          status = (localResult ? localResult.passed : summary && summary.last_passed) ? 'passed' : 'review';
+        }
+        if (i === state.currentChunkIdx) status = 'current';
+
+        let fill = '#52526e', glow = '';
+        if (status === 'passed') { fill = '#fbbf24'; glow = 'color:#fbbf24'; }
+        else if (status === 'review') { fill = '#f87171'; glow = 'color:#f87171'; }
+        else if (status === 'current') { fill = '#818cf8'; glow = 'color:#818cf8'; }
+
+        const r = status === 'current' ? 7 : 5.5;
+        const haloR = r + 5;
+        const nodeClass = status === 'current' ? 'node-current' : '';
+        const icon = status === 'passed' ? '★' : status === 'review' ? '!' : '';
+        const canJump = status !== 'current' && clickable && isChunkVisited(i, chunk);
+
+        nodesHtml += `
+          <g class="${nodeClass}" style="${glow}${canJump ? ';cursor:pointer' : ''}" ${canJump ? `data-jump-idx="${i}"` : ''}>
+            ${canJump ? `<circle cx="${x}" cy="${y}" r="12" fill="transparent" />` : ''}
+            ${status === 'current' ? `<circle class="node-halo" cx="${x}" cy="${y}" r="${haloR}" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.6" />` : ''}
+            <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="#0a0a12" stroke-width="1.5" />
+            ${icon ? `<text x="${x}" y="${y+3}" text-anchor="middle" font-size="7" fill="#0a0a12" font-weight="bold">${icon}</text>` : ''}
+            <text x="${x}" y="${y + 20}" text-anchor="middle" font-size="9" fill="#8d8dae" font-family="monospace">${escapeHtml(String(i+1))}</text>
+          </g>
+        `;
+      });
+
+      box.innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="star-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" fill="#4c4d78" />
+            </marker>
+          </defs>
+          ${bgStars}
+          ${linesHtml}
+          ${nodesHtml}
+        </svg>
+      `;
+
+      box.querySelectorAll('[data-jump-idx]').forEach(el => {
+        el.addEventListener('click', () => jumpToChunk(parseInt(el.getAttribute('data-jump-idx'), 10)));
+      });
+
+      // HUD リング更新
+      const total = n;
+      const done = Object.keys(state.chunkResults).length;
+      const passed = Object.values(state.chunkResults).filter(r => r.passed).length;
+      const hudWrapper = document.getElementById('hud-ring-wrapper');
+      hudWrapper.classList.remove('hidden');
+      const circumference = 2 * Math.PI * 14;
+      const ratio = total > 0 ? done / total : 0;
+      document.getElementById('hud-ring-progress').setAttribute('stroke-dasharray', circumference.toFixed(1));
+      document.getElementById('hud-ring-progress').setAttribute('stroke-dashoffset', (circumference * (1 - ratio)).toFixed(1));
+      document.getElementById('hud-ring-label').innerHTML = `${done}/${total}<br>完了`;
+    }
+
+    // ── 対話スレッド ヘルパー ──
+    function appendMessage(html) {
+      const container = document.getElementById('thread-messages');
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      const node = wrapper.firstElementChild;
+      container.appendChild(node);
+      container.scrollTop = container.scrollHeight;
+      return node;
+    }
+
+    function setComposeVisible(visible) {
+      document.getElementById('compose-bar').classList.toggle('hidden', !visible);
+    }
+    function setComposeEnabled(enabled) {
+      document.getElementById('answer-input').disabled = !enabled;
+      document.getElementById('btn-submit').disabled = !enabled;
+      document.getElementById('btn-skip').disabled = !enabled;
+      document.getElementById('compose-bar').style.opacity = enabled ? '1' : '0.5';
+    }
+
+    // ── 個別ピンポイント検索キーワードの分解生成 ──
+    function buildIndividualSearchItems() {
+      if (!state.sessionData) return [];
+      const chunk = state.sessionData.chunks[state.currentChunkIdx];
+      const code = chunk.code_segment || "";
+      const missTags = state.lastEvalForChunk?.miss_categories || [];
+
+      const items = [];
+      const techTokens = ["isinstance", "TypeError", "ValueError", "ZeroDivisionError", "raise", "assert"];
+      techTokens.forEach(token => {
+        if (code.includes(token)) {
+          items.push({ label: `Python ${token} 使い方`, query: `Python ${token} 使い方` });
+        }
+      });
+
+      missTags.forEach(tag => {
+        const cleanTag = tag.replace(/の見落とし/g, '').replace(/の欠落/g, '');
+        items.push({ label: `Python ${cleanTag} 例外処理`, query: `Python ${cleanTag} 例外処理` });
+      });
+
+      return items;
+    }
+
+    function buildLLMPrompt() {
+      if (!state.sessionData) return "";
+      const chunk = state.sessionData.chunks[state.currentChunkIdx];
+      return `以下のPythonコードについて学習しています。コードの検証ロジックや仕様について学んでいますが、答えを直接言わずに、私が自力で理解するための考え方のヒントと関連する文法解説だけを教えてください。\n\n【対象コード】\n${chunk.code_segment}`;
+    }
+
+    function copyText(str) {
+      navigator.clipboard.writeText(str);
+      showToast(`コピーしました: "${str}"`);
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch(`${API_BASE}/api/health`, { cache: 'no-store' });
+        const data = await res.json();
+        document.getElementById('engine-badge').innerText = data.engine;
+      } catch(e) {
+        document.getElementById('engine-badge').innerText = "Disconnected (Port 8000)";
+      }
+    }
+
     async function startSession() {
       showView('view-init');
+      document.getElementById('thread-messages').innerHTML = '';
+      document.getElementById('file-path-badge').innerText = `📁 ${state.filePath.split('\\').pop() || state.filePath.split('/').pop()}`;
+      document.getElementById('file-path-badge').title = state.filePath;
+
       try {
         const res = await fetch(`${API_BASE}/api/session/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
           body: JSON.stringify({ file_path: state.filePath, target_score: state.targetScore })
         });
         const json = await res.json();
         if (json.status === 'success') {
           state.sessionData = json.data;
           state.currentChunkIdx = 0;
-          loadQuestionForCurrentChunk();
+          state.chunkResults = {};
+          await fetchProjectAnalytics(json.data.project.id);
+          renderConstellation();
+          loadQuestion();
         } else {
-          alert('エラー: ' + json.detail);
+          showToast('セッション開始に失敗しました');
         }
       } catch(e) {
-        alert('FastAPI サーバーに接続できませんでした: ' + e);
+        console.error(e);
+        showToast('バックエンドに接続できません (127.0.0.1:8000)');
       }
     }
 
-    // 2. 質問生成 API
-    async function loadQuestionForCurrentChunk() {
+    async function fetchProjectAnalytics(projectId) {
+      try {
+        const res = await fetch(`${API_BASE}/api/analytics/${projectId}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (json.status === 'success') {
+          state.projectAnalytics = json.analytics;
+        }
+      } catch(e) {
+        console.error(e);
+      }
+    }
+
+    async function loadQuestion() {
       const chunks = state.sessionData.chunks;
       if (state.currentChunkIdx >= chunks.length) {
+        loadFinishAnalytics();
         showView('view-finish');
         return;
       }
 
-      showView('view-init'); // ローディング
+      setComposeVisible(false);
       const currentChunk = chunks[state.currentChunkIdx];
-      const axis = state.currentChunkIdx % 2 === 0 ? "構造軸" : "関係軸";
+      // entrypoint Chunk（__main__ ブロック等）は関数同士の呼び出し関係を示す教材なので常に関係軸で出題
+      const axis = currentChunk.chunk_type === 'entrypoint'
+        ? "関係軸"
+        : (state.currentChunkIdx % 2 === 0 ? "構造軸" : "関係軸");
+
+      const typingNode = appendThreadTyping();
 
       try {
         const res = await fetch(`${API_BASE}/api/question/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chunk: currentChunk, axis: axis, difficulty: "標準" })
+          cache: 'no-store',
+          body: JSON.stringify({ chunk: currentChunk, axis: axis, difficulty: state.difficulty })
         });
         const json = await res.json();
+        typingNode.remove();
         if (json.status === 'success') {
           state.currentQuestion = json.data;
-          renderQuestionView(currentChunk, state.currentQuestion);
+          renderQuestionView();
+        } else {
+          showToast('質問の生成に失敗しました');
         }
       } catch(e) {
-        alert('質問生成エラー: ' + e);
+        console.error(e);
+        typingNode.remove();
+        showToast('バックエンドに接続できません');
       }
     }
 
-    // 3. 質問ビューのレンダリング
-    function renderQuestionView(chunk, qData) {
-      showView('view-question');
+    function appendThreadTyping() {
+      showView('view-workspace');
+      return appendMessage(`
+        <div class="msg msg-ai" id="msg-typing-question">
+          <div class="msg-avatar">🧠</div>
+          <div class="msg-bubble msg-bubble-ai">
+            <div class="typing-dots"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+      `);
+    }
 
+    // 質問ビュー描画 (対話スレッドに追記)
+    async function renderQuestionView() {
+      showView('view-workspace');
+
+      const chunk = state.sessionData.chunks[state.currentChunkIdx];
       const total = state.sessionData.chunks.length;
       const idx = state.currentChunkIdx + 1;
-      document.getElementById('progress-fill').style.width = `${(idx / total) * 100}%`;
-      document.getElementById('chunk-meta').innerText = `Chunk ${idx} / ${total} — ${chunk.name}`;
-      document.getElementById('axis-meta').innerText = qData.axis || "構造軸";
-      document.getElementById('diff-meta').innerText = `${qData.difficulty || "標準"} (目標 ${state.targetScore}点)`;
-      document.getElementById('question-text').innerText = qData.question;
 
-      document.getElementById('code-chunk-name').innerText = `${chunk.name} L${chunk.start_line}-L${chunk.end_line}`;
-      document.getElementById('code-snippet').innerText = chunk.code_segment;
+      document.getElementById('chunk-progress-badge').innerText = `Chunk ${idx} / ${total}`;
+      document.getElementById('axis-badge').innerText = `軸: ${state.currentQuestion.axis || "構造軸"}`;
+      document.getElementById('code-chunk-label').innerText = `${chunk.name} L${chunk.start_line}-L${chunk.end_line}`;
 
-      // Mermaid 図
-      const mContainer = document.getElementById('mermaid-container');
-      const mGraph = document.getElementById('mermaid-graph');
-      if (qData.mermaid_diagram) {
-        mContainer.classList.remove('hidden');
-        mGraph.innerHTML = `<div class="mermaid">${qData.mermaid_diagram}</div>`;
-        try {
-          mermaid.contentLoaded();
-        } catch(e) {}
-      } else {
-        mContainer.classList.add('hidden');
-      }
+      renderConstellation();
 
-      // 2回目以降の着眼点ガイド
-      const hintContainer = document.getElementById('hint-guide-container');
-      if (state.lastEvalResult && !state.lastEvalResult.is_passed) {
-        hintContainer.classList.remove('hidden');
-        document.getElementById('last-feedback-text').innerText = `前回のフィードバック: ${state.lastEvalResult.feedback || ''}`;
-        
-        const tagsBox = document.getElementById('miss-tags-container');
-        tagsBox.innerHTML = '';
-        (state.lastEvalResult.miss_categories || []).forEach(tag => {
-          tagsBox.innerHTML += `<span class="tag">${tag}</span>`;
+      // 動的コード行ハイライト描画エンジン
+      const container = document.getElementById('code-snippet-container');
+      const lines = (chunk.code_segment || "").split('\n');
+      const startLineNum = chunk.start_line || 1;
+
+      const isRetryForChunk = (state.lastEvalForChunk && !state.lastEvalForChunk.is_passed) ||
+        (state.projectAnalytics && state.projectAnalytics.chunk_summary[chunk.name] && !state.projectAnalytics.chunk_summary[chunk.name].last_passed);
+
+      let html = '';
+      lines.forEach((line, i) => {
+        const lineNum = startLineNum + i;
+        const isFocusLine = isRetryForChunk && (line.includes('if') || line.includes('raise') || line.includes('return') || line.includes('assert'));
+        const hlClass = isFocusLine ? 'code-line-highlight' : '';
+        html += `
+          <div class="code-line ${hlClass}">
+            <span class="code-line-num">${lineNum}</span>
+            <span class="code-line-content">${escapeHtml(line)}</span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+
+      // Mermaid 図描画 (LLM生成テキストはエスケープしてから挿入)
+      const mBox = document.getElementById('mermaid-box');
+      await renderMermaidInto(mBox, state.currentQuestion.mermaid_diagram);
+
+      // AIからの質問バブルをスレッドに追記
+      appendMessage(`
+        <div class="msg msg-ai">
+          <div class="msg-avatar">🧠</div>
+          <div class="msg-bubble msg-bubble-ai">
+            <div class="text-[10px] text-indigo-300 font-semibold mb-1.5 font-display">Chunk ${idx}/${total} ・ ${escapeHtml(state.currentQuestion.axis || '構造軸')}</div>
+            <div class="text-brand-text">${escapeHtml(state.currentQuestion.question)}</div>
+          </div>
+        </div>
+      `);
+
+      // 再挑戦時: 着眼点ガイド ＆ ピンポイント検索チップをシステムバブルとして追記
+      if (isRetryForChunk) {
+        const missTags = state.lastEvalForChunk?.miss_categories || ['例外クラス名の明記', '戻り値仕様の欠落'];
+        const feedback = state.lastEvalForChunk?.feedback || '前回このChunkは要復習でした。コードの条件式と例外処理に注目しましょう。';
+        const searchItems = buildIndividualSearchItems();
+        const llmPrompt = buildLLMPrompt();
+
+        const chipsHtml = searchItems.length > 0
+          ? searchItems.map((item, ci) => `
+              <div class="flex justify-between items-center p-1.5 rounded bg-brand-bg border border-brand-border hover:border-indigo-400/50 transition-colors">
+                <span class="font-medium text-zinc-200">${escapeHtml(item.label)}</span>
+                <div class="flex gap-1">
+                  <button data-copy-chip="${ci}" class="px-2 py-0.5 rounded bg-indigo-500/25 text-indigo-200 hover:bg-indigo-500/40 transition-colors text-[10px]">📋 コピー</button>
+                  <a href="https://www.google.com/search?q=${encodeURIComponent(item.query)}" target="_blank" class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-[10px]">🌐 検索</a>
+                </div>
+              </div>
+            `).join('')
+          : `<span class="text-brand-muted">推奨キーワードがありません。</span>`;
+
+        const hintNode = appendMessage(`
+          <div class="msg msg-system">
+            <div class="msg-avatar">💡</div>
+            <div class="msg-bubble msg-bubble-system">
+              <div class="font-bold text-brand-amber mb-1.5 flex items-center gap-1.5 font-display">💡 再回答のための着眼点ガイド (丸パクリ防止)</div>
+              <p class="text-zinc-300 mb-2.5">${escapeHtml(feedback)}</p>
+              <div class="flex flex-wrap gap-1.5 mb-3">
+                ${missTags.map(tag => `<span class="px-2 py-0.5 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">${escapeHtml(tag)}</span>`).join('')}
+              </div>
+              <div class="pt-3 border-t border-brand-amber/20 flex flex-wrap gap-3">
+                <div class="popover-wrapper">
+                  <button class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-indigo-200 border border-indigo-400/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
+                    🔍 ピンポイント検索ワードを選ぶ ▾
+                  </button>
+                  <div class="popover-content">
+                    <span class="text-indigo-300 font-bold block mb-2">🔍 調べたい単語をクリックしてコピー:</span>
+                    <div class="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">${chipsHtml}</div>
+                  </div>
+                </div>
+                <div class="popover-wrapper">
+                  <button data-copy-llm-prompt class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
+                    🤖 ChatGPT/Claude用プロンプトをコピー
+                  </button>
+                  <div class="popover-content">
+                    <span class="text-emerald-400 font-bold block mb-1">🤖 コピーされるLLM質問文:</span>
+                    <span class="text-zinc-300 block truncate max-w-[280px]">${escapeHtml(llmPrompt)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `);
+
+        hintNode.querySelectorAll('[data-copy-chip]').forEach(btn => {
+          const item = searchItems[parseInt(btn.getAttribute('data-copy-chip'), 10)];
+          btn.addEventListener('click', () => copyText(item.query));
         });
-      } else {
-        hintContainer.classList.add('hidden');
+        const llmPromptBtn = hintNode.querySelector('[data-copy-llm-prompt]');
+        if (llmPromptBtn) llmPromptBtn.addEventListener('click', () => copyText(llmPrompt));
       }
 
-      document.getElementById('answer-input').value = '';
+      document.getElementById('answer-input').value = "";
+      setComposeVisible(true);
+      setComposeEnabled(true);
+      document.getElementById('answer-input').focus();
     }
 
-    // 4. 回答評価 API
-    document.getElementById('btn-submit').addEventListener('click', () => submitAnswer(false));
-    document.getElementById('btn-skip').addEventListener('click', () => submitAnswer(true));
+    document.getElementById('btn-submit').addEventListener('click', () => evaluateAnswer(false));
+    document.getElementById('btn-skip').addEventListener('click', () => evaluateAnswer(true));
 
-    async function submitAnswer(isSkip) {
-      const answerText = isSkip ? "(パス)" : document.getElementById('answer-input').value.trim();
-      if (!isSkip && !answerText) return;
+    document.getElementById('btn-expand-diagram').addEventListener('click', openDiagramModal);
+    document.getElementById('btn-close-diagram-modal').addEventListener('click', closeDiagramModal);
+    document.getElementById('diagram-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'diagram-modal') closeDiagramModal();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDiagramModal();
+    });
 
-      showView('view-evaluating');
+    async function evaluateAnswer(isSkip) {
+      const text = isSkip ? "(パス)" : document.getElementById('answer-input').value.trim();
+      if (!isSkip && !text) return;
+
+      state.userAnswer = text;
+
+      // ユーザーの回答をスレッドに追記
+      appendMessage(`
+        <div class="msg msg-user">
+          <div class="msg-avatar">🧑</div>
+          <div class="msg-bubble msg-bubble-user">${escapeHtml(text)}</div>
+        </div>
+      `);
+
+      setComposeVisible(false);
+      const typingNode = appendMessage(`
+        <div class="msg msg-ai" id="msg-typing-eval">
+          <div class="msg-avatar">🧠</div>
+          <div class="msg-bubble msg-bubble-ai">
+            <div class="text-[11px] text-brand-muted mb-1">コーチが厳格採点中...</div>
+            <div class="typing-dots"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+      `);
 
       const currentChunk = state.sessionData.chunks[state.currentChunkIdx];
 
@@ -521,83 +1034,170 @@
         const res = await fetch(`${API_BASE}/api/answer/evaluate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
           body: JSON.stringify({
             session_id: state.sessionData.session.id,
             chunk: currentChunk,
             question_data: state.currentQuestion,
-            user_answer: answerText,
+            user_answer: text,
             target_score: state.targetScore
           })
         });
         const json = await res.json();
+        typingNode.remove();
         if (json.status === 'success') {
-          state.lastEvalResult = json.data;
-          renderResultView(answerText, json.data);
+          const evalRes = json.data;
+          state.lastEvalForChunk = evalRes.is_passed ? null : evalRes;
+          state.chunkResults[state.currentChunkIdx] = { passed: !!evalRes.is_passed, score: evalRes.score };
+          renderResultView(evalRes);
+          renderConstellation();
+        } else {
+          showToast('採点に失敗しました');
+          setComposeVisible(true);
         }
       } catch(e) {
-        alert('評価処理エラー: ' + e);
+        console.error(e);
+        typingNode.remove();
+        showToast('バックエンドに接続できません');
+        setComposeVisible(true);
       }
     }
 
-    // 5. 採点結果ビューの描画
-    function renderResultView(userAnswer, evalRes) {
-      showView('view-result');
+    function renderResultView(evalRes) {
+      const statusHtml = evalRes.is_passed
+        ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-green/10 text-brand-green border border-brand-green/30 font-bold text-xs">✅ 合格</span>`
+        : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-red/10 text-brand-red border border-brand-red/30 font-bold text-xs">📖 要復習</span>`;
 
-      document.getElementById('result-score').innerText = evalRes.score;
-      document.getElementById('submitted-answer-text').innerText = userAnswer;
+      const rubricRows = (evalRes.score_details || []).map(item => `
+        <tr class="hover:bg-brand-panel/50 transition-colors">
+          <td class="p-2 font-medium text-brand-text">${escapeHtml(item.name)}</td>
+          <td class="p-2 font-bold"><span class="${item.score > 0 ? 'text-brand-green' : 'text-brand-red'}">${escapeHtml(String(item.score))}</span> / ${escapeHtml(String(item.max))}</td>
+          <td class="p-2 text-brand-muted text-[11px]">${escapeHtml(item.reason)}</td>
+        </tr>
+      `).join('');
 
-      const badgeContainer = document.getElementById('status-badge-container');
-      if (evalRes.is_passed) {
-        badgeContainer.innerHTML = `<div class="status-badge status-passed">✅ 合格</div>`;
-      } else {
-        badgeContainer.innerHTML = `<div class="status-badge status-failed">📖 要復習</div>`;
-      }
+      const isLast = state.currentChunkIdx >= state.sessionData.chunks.length - 1;
+      const nextLabel = isLast ? '🌠 星図を完成させる' : '▶️ 次のChunkへ進む';
 
-      // ルーブリック詳細
-      const tbody = document.getElementById('rubric-tbody');
-      tbody.innerHTML = '';
-      (evalRes.score_details || []).forEach(item => {
-        tbody.innerHTML += `
-          <tr>
-            <td><b>${item.name}</b></td>
-            <td><b style="color: ${item.score > 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${item.score}</b> / ${item.max} 点</td>
-            <td style="color: var(--text-muted); font-size: 0.9rem;">${item.reason}</td>
-          </tr>
-        `;
+      const resultNode = appendMessage(`
+        <div class="msg msg-ai">
+          <div class="msg-avatar">🧠</div>
+          <div class="msg-bubble msg-bubble-ai msg-bubble-result" style="max-width:96%;">
+            <div class="flex justify-between items-center mb-3">
+              <div>
+                <span class="text-[10px] text-brand-muted block">理解度スコア</span>
+                <span class="text-2xl font-extrabold text-indigo-300 font-display">${escapeHtml(String(evalRes.score))} <span class="text-xs font-normal text-brand-muted">/ 100点</span></span>
+              </div>
+              ${statusHtml}
+            </div>
+
+            <details class="rubric-details mb-3">
+              <summary class="text-xs font-semibold text-brand-muted flex items-center gap-1.5 py-1">
+                <span class="rubric-chevron">▸</span> 📋 項目別採点詳細を見る
+              </summary>
+              <div class="border border-brand-border rounded-lg overflow-hidden mt-2">
+                <table class="w-full text-left text-xs border-collapse">
+                  <thead class="bg-brand-bg text-brand-muted border-b border-brand-border">
+                    <tr><th class="p-2">評価観点</th><th class="p-2 w-16">得点</th><th class="p-2">理由・コメント</th></tr>
+                  </thead>
+                  <tbody class="divide-y divide-brand-border">${rubricRows}</tbody>
+                </table>
+              </div>
+            </details>
+
+            <div class="p-3 rounded-lg bg-brand-bg border border-brand-border mb-3 text-xs">
+              <span class="font-bold text-indigo-300 block mb-1 font-display">💬 コーチからのアドバイス</span>
+              <p class="text-zinc-300 leading-relaxed">${escapeHtml(evalRes.feedback || "頑張りましょう！")}</p>
+            </div>
+
+            <div class="flex gap-2">
+              <button class="btn-thread-next flex-1 py-2 px-3 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-xs rounded-lg transition-colors">${nextLabel}</button>
+              ${!evalRes.is_passed ? `<button class="btn-thread-retry py-2 px-3 bg-brand-panel hover:bg-zinc-700 text-zinc-300 font-semibold text-xs rounded-lg border border-brand-border transition-colors">🔄 学び直す</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `);
+
+      resultNode.querySelector('.btn-thread-next').addEventListener('click', () => {
+        resultNode.querySelectorAll('button').forEach(b => b.disabled = true);
+        state.currentChunkIdx++;
+        state.lastEvalForChunk = null;
+        loadQuestion();
       });
-
-      // アドバイス
-      document.getElementById('coach-advice-box').innerText = evalRes.feedback || "頑張りましょう！";
+      const retryBtn = resultNode.querySelector('.btn-thread-retry');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => {
+          resultNode.querySelectorAll('button').forEach(b => b.disabled = true);
+          appendMessage(`
+            <div class="msg msg-system">
+              <div class="msg-avatar">🔄</div>
+              <div class="msg-bubble msg-bubble-system text-zinc-300">同じ質問にもう一度挑戦してみましょう。上のヒントを参考にしてください。</div>
+            </div>
+          `);
+          setComposeVisible(true);
+          setComposeEnabled(true);
+          document.getElementById('answer-input').focus();
+        });
+      }
     }
 
-    // ボタンナビゲーション
-    document.getElementById('btn-next-chunk').addEventListener('click', () => {
-      state.currentChunkIdx++;
-      state.lastEvalResult = null; // リセット
-      loadQuestionForCurrentChunk();
-    });
+    async function loadFinishAnalytics() {
+      if (!state.sessionData || !state.sessionData.project) return;
+      const projectId = state.sessionData.project.id;
 
-    document.getElementById('btn-retry-chunk').addEventListener('click', () => {
-      renderQuestionView(state.sessionData.chunks[state.currentChunkIdx], state.currentQuestion);
-    });
+      try {
+        const res = await fetch(`${API_BASE}/api/analytics/${projectId}`, { cache: 'no-store' });
+        const json = await res.json();
+        if (json.status === 'success') {
+          const analytics = json.analytics;
+
+          const weakList = document.getElementById('analytics-weakness-list');
+          if (analytics.top_weaknesses && analytics.top_weaknesses.length > 0) {
+            weakList.innerHTML = analytics.top_weaknesses.map(w => `
+              <span class="px-2.5 py-1 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">
+                ${escapeHtml(w.category)} (${escapeHtml(String(w.count))}回)
+              </span>
+            `).join('');
+          } else {
+            weakList.innerHTML = `<span class="text-brand-green">🎉 全体的な弱点タグは見つかりませんでした！</span>`;
+          }
+
+          const chunkList = document.getElementById('analytics-chunk-list');
+          const summaryKeys = Object.keys(analytics.chunk_summary || {});
+          if (summaryKeys.length > 0) {
+            chunkList.innerHTML = summaryKeys.map(key => {
+              const info = analytics.chunk_summary[key];
+              const badgeClass = info.last_passed ? "bg-brand-green/20 text-brand-green" : "bg-brand-red/20 text-brand-red";
+              const badgeText = info.last_passed ? "✅ 合格" : "📖 要復習";
+              return `
+                <div class="flex justify-between items-center p-2 rounded bg-brand-card border border-brand-border">
+                  <span class="font-mono text-zinc-200">${escapeHtml(key)}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-brand-muted">前回: <b>${escapeHtml(String(info.latest_score))}点</b> (最高: ${escapeHtml(String(info.max_score))}点)</span>
+                    <span class="px-2 py-0.5 rounded ${badgeClass} font-bold">${badgeText}</span>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          } else {
+            chunkList.innerHTML = `<span class="text-brand-muted">Chunkの成績履歴はまだありません。</span>`;
+          }
+        }
+      } catch(e) {
+        console.error(e);
+      }
+    }
 
     document.getElementById('btn-restart').addEventListener('click', () => {
       startSession();
     });
 
     function showView(viewId) {
-      ['view-init', 'view-question', 'view-evaluating', 'view-result', 'view-finish'].forEach(id => {
+      ['view-init', 'view-workspace', 'view-finish'].forEach(id => {
         const el = document.getElementById(id);
         if (id === viewId) el.classList.remove('hidden');
         else el.classList.add('hidden');
       });
-    }
-
-    // 単体起動テスト用の初期実行
-    if (!vscode) {
-      state.filePath = "C:\\Users\\owner\\Documents\\lab\\DeDoughtスプレッドシート\\検証用ファイル\\assert-and-raise.py";
-      document.getElementById('init-file-path').innerText = state.filePath;
-      startSession();
     }
   </script>
 </body>

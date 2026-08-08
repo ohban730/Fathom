@@ -12,7 +12,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:dedoubt.startSession"
+    "onCommand:dedoubt.startSession",
+    "onView:dedoubt.panelView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -30,7 +31,25 @@
         "mac": "cmd+alt+d",
         "when": "editorTextFocus"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "dedoubtPanelContainer",
+          "title": "DeDoubt",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "dedoubtPanelContainer": [
+        {
+          "type": "webview",
+          "id": "dedoubt.panelView",
+          "name": "DeDoubt"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

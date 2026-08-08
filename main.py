@@ -149,6 +149,19 @@ def get_dashboard_data(session_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ダッシュボード取得エラー: {str(e)}")
 
+@app.get("/api/analytics/{project_id}")
+def get_project_analytics_data(project_id: int):
+    """過去の全セッションを横断分析し、Chunk別の習熟度と全体苦手カテゴリを取得"""
+    try:
+        from dedoubt.db import get_project_analytics
+        analytics = get_project_analytics(project_id, db_path=DB_PATH)
+        return {
+            "status": "success",
+            "analytics": analytics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"アナリティクス取得エラー: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

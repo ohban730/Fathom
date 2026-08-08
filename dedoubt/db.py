@@ -5,6 +5,7 @@ ER図 (v1.1) に基づく永続化ロジック
 - projects
 - sessions
 - qa_histories
+- project_analytics
 """
 import sqlite3
 import json
@@ -180,3 +181,55 @@ def get_chunk_history_summary(chunk_ref: str, db_path: str = DEFAULT_DB_PATH) ->
             (chunk_ref,)
         )
         return [dict(r) for r in cursor.fetchall()]
+
+def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
+    """過去の全セッションを横断分析し、Chunk別の習熟度と全体苦手カテゴリを取得"""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        # プロジェクト配下の全 QA 履歴を取得
+        cursor.execute(
+            """
+            SELECT h.* FROM qa_histories h
+            JOIN sessions s ON h.session_id = s.id
+            WHERE s.project_id = ?
+            ORDER BY h.id ASC
+            """,
+            (project_id,)
+        )
+        rows = cursor.fetchall()
+
+        chunk_summary = {}
+        all_miss_categories = {}
+
+        for r in rows:
+            chunk = r["chunk_ref"]
+            score = r["score"]
+            passed = bool(r["is_passed"])
+            misses = json.loads(r["miss_categories"]) if r["miss_categories"] else []
+
+            if chunk not in chunk_summary:
+                chunk_summary[chunk] = {
+                    "latest_score": score,
+                    "max_score": score,
+                    "attempts": 1,
+                    "last_passed": passed,
+                    "last_feedback": r["feedback"]
+                }
+            else:
+                chunk_summary[chunk]["latest_score"] = score
+                chunk_summary[chunk]["max_score"] = max(chunk_summary[chunk]["max_score"], score)
+                chunk_summary[chunk]["attempts"] += 1
+                chunk_summary[chunk]["last_passed"] = passed
+                chunk_summary[chunk]["last_feedback"] = r["feedback"]
+
+            for m in misses:
+                all_miss_categories[m] = all_miss_categories.get(m, 0) + 1
+
+        # 苦手順（出現回数順）にソート
+        top_weaknesses = sorted(all_miss_categories.items(), key=lambda x: x[1], reverse=True)
+
+        return {
+            "project_id": project_id,
+            "chunk_summary": chunk_summary,
+            "top_weaknesses": [{"category": k, "count": v} for k, v in top_weaknesses]
+        }
