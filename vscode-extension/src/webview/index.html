@@ -88,6 +88,9 @@
       visibility: visible;
       opacity: 1;
     }
+    /* ヘッダー等、上に開くスペースがない場所用のバリエーション */
+    .popover-content.popover-below { bottom: auto; top: 125%; }
+    .popover-content.popover-right { left: auto; right: 0; }
 
     /* ── 星図マップ ── */
     @keyframes starPulse {
@@ -199,6 +202,18 @@
       <span id="file-path-badge" class="text-xs font-mono text-brand-muted truncate max-w-[260px]" title="">
         📁 読み込み中...
       </span>
+
+      <div class="popover-wrapper">
+        <span class="w-5 h-5 rounded-full bg-brand-card border border-brand-border text-brand-muted hover:text-indigo-300 hover:border-indigo-400/40 flex items-center justify-center text-[11px] font-bold cursor-help transition-colors" tabindex="0">?</span>
+        <div class="popover-content popover-below popover-right">
+          <span class="text-indigo-300 font-bold block mb-2">📂 別フォルダのファイルを対象にするには</span>
+          <ul class="list-disc pl-4 space-y-1.5 text-zinc-300">
+            <li><b>1ファイルだけ試す</b>: <code>Ctrl+O</code>で直接ファイルを開く、またはエディタ未選択のまま<code>Ctrl+Alt+D</code>を押してファイル選択ダイアログから選ぶ</li>
+            <li><b>複数フォルダを並べて操作する</b>: コマンドパレットで<code>Workspaces: Add Folder to Workspace...</code>を実行し、無関係な任意のフォルダを追加する</li>
+            <li><b>組み合わせを保存する</b>: <code>File &gt; Save Workspace As...</code>で.code-workspaceとして保存すれば、次回から一発で同じフォルダ構成に復元できる</li>
+          </ul>
+        </div>
+      </div>
     </div>
   </header>
 
