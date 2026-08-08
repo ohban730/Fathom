@@ -403,7 +403,9 @@
   </div>
 
   <script>
-    const API_BASE = "http://127.0.0.1:8000";
+    // vscode拡張ホストからbackendReadyで実際のポート番号を受け取るまでのフォールバック既定値。
+    // (ブラウザで直接index.htmlを開く単体プレビュー時はこの既定値のまま使う)
+    let API_BASE = "http://127.0.0.1:8000";
     const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 
     let state = {
@@ -428,7 +430,11 @@
         flowchart: { nodeSpacing: 22, rankSpacing: 26, padding: 6, curve: 'basis' },
         sequence: { actorMargin: 44, messageMargin: 18, boxMargin: 6, noteMargin: 6, mirrorActors: false }
       });
-      checkHealth();
+      // vscode拡張ホスト経由の場合は、backendReadyで実際のAPI_BASEを受け取ってからヘルスチェックする。
+      // 単体プレビュー(vscodeなし)の場合は既定値のままただちに確認する。
+      if (!vscode) {
+        checkHealth();
+      }
 
       document.getElementById('select-target-score').addEventListener('change', (e) => {
         state.targetScore = parseInt(e.target.value, 10);
@@ -440,6 +446,11 @@
 
       window.addEventListener('message', (event) => {
         const message = event.data;
+        if (message.command === 'backendReady') {
+          API_BASE = message.apiBase;
+          checkHealth();
+          return;
+        }
         if (message.command === 'initSession' || message.command === 'switchFile') {
           if (message.filePath && message.filePath !== state.filePath) {
             state.filePath = message.filePath;

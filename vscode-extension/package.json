@@ -49,6 +49,16 @@
           "name": "DeDoubt"
         }
       ]
+    },
+    "configuration": {
+      "title": "DeDoubt",
+      "properties": {
+        "dedoubt.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "DeDoubtバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのdedoubt環境のpython.exe)。未設定の場合はバックエンドを起動できません。"
+        }
+      }
     }
   },
   "scripts": {

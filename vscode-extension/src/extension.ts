@@ -1,6 +1,113 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as net from 'net';
+import * as http from 'http';
+import { ChildProcess, spawn } from 'child_process';
+
+function findFreePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.on('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+            const address = server.address();
+            if (address && typeof address === 'object') {
+                const port = address.port;
+                server.close(() => resolve(port));
+            } else {
+                server.close();
+                reject(new Error('空きポートの取得に失敗しました'));
+            }
+        });
+    });
+}
+
+function httpGetOk(url: string): Promise<boolean> {
+    return new Promise((resolve) => {
+        const req = http.get(url, (res) => {
+            res.resume();
+            resolve(res.statusCode === 200);
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(1000, () => {
+            req.destroy();
+            resolve(false);
+        });
+    });
+}
+
+async function waitUntilHealthy(apiBase: string, retries = 30, intervalMs = 300): Promise<boolean> {
+    for (let i = 0; i < retries; i++) {
+        if (await httpGetOk(`${apiBase}/api/health`)) {
+            return true;
+        }
+        await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return false;
+}
+
+// main.py(FastAPIバックエンド)をサブプロセスとして起動・監督するクラス。
+// ポートは固定せず空きポートを動的に確保することで、他プロセスとの競合を避ける。
+class BackendServer {
+    private process: ChildProcess | undefined;
+    public apiBase: string | undefined;
+
+    constructor(private readonly context: vscode.ExtensionContext) {}
+
+    async start(): Promise<string | undefined> {
+        const pythonPath = vscode.workspace.getConfiguration('dedoubt').get<string>('pythonPath', '');
+        if (!pythonPath) {
+            vscode.window.showErrorMessage(
+                'DeDoubt: バックエンドを起動できません。設定「dedoubt.pythonPath」にPython実行体の絶対パスを指定してください(セットアップ手順を参照)。'
+            );
+            return undefined;
+        }
+
+        const port = await findFreePort();
+        const backendDir = this.context.extensionPath;
+
+        const proc = spawn(
+            pythonPath,
+            ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(port)],
+            {
+                cwd: backendDir,
+                env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+            }
+        );
+        this.process = proc;
+
+        let stderrTail = '';
+        proc.stderr?.on('data', (chunk) => {
+            stderrTail = (stderrTail + chunk.toString()).slice(-2000);
+        });
+        proc.on('error', (err) => {
+            vscode.window.showErrorMessage(`DeDoubt: バックエンドの起動に失敗しました(${pythonPath}): ${err.message}`);
+        });
+        proc.on('exit', (code) => {
+            this.apiBase = undefined;
+            if (code !== null && code !== 0) {
+                vscode.window.showErrorMessage(`DeDoubt: バックエンドが異常終了しました(code ${code})。\n${stderrTail}`);
+            }
+        });
+
+        const apiBase = `http://127.0.0.1:${port}`;
+        const healthy = await waitUntilHealthy(apiBase);
+        if (!healthy) {
+            vscode.window.showErrorMessage('DeDoubt: バックエンドの起動確認がタイムアウトしました。dedoubt.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。');
+            this.stop();
+            return undefined;
+        }
+
+        this.apiBase = apiBase;
+        return apiBase;
+    }
+
+    stop(): void {
+        this.process?.kill();
+        this.process = undefined;
+        this.apiBase = undefined;
+    }
+}
 
 class DeDoubtViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'dedoubt.panelView';
@@ -8,6 +115,7 @@ class DeDoubtViewProvider implements vscode.WebviewViewProvider {
     private view?: vscode.WebviewView;
     private isReady = false;
     private pendingMessage?: any;
+    private apiBase?: string;
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -31,6 +139,9 @@ class DeDoubtViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage((message) => {
             if (message?.command === 'ready') {
                 this.isReady = true;
+                if (this.apiBase) {
+                    webviewView.webview.postMessage({ command: 'backendReady', apiBase: this.apiBase });
+                }
                 if (this.pendingMessage) {
                     webviewView.webview.postMessage(this.pendingMessage);
                     this.pendingMessage = undefined;
@@ -44,6 +155,13 @@ class DeDoubtViewProvider implements vscode.WebviewViewProvider {
                 this.isReady = false;
             }
         });
+    }
+
+    public setApiBase(apiBase: string): void {
+        this.apiBase = apiBase;
+        if (this.view && this.isReady) {
+            this.view.webview.postMessage({ command: 'backendReady', apiBase });
+        }
     }
 
     public postMessage(message: any): void {
@@ -63,6 +181,14 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(DeDoubtViewProvider.viewType, provider)
     );
+
+    const backend = new BackendServer(context);
+    backend.start().then((apiBase) => {
+        if (apiBase) {
+            provider.setApiBase(apiBase);
+        }
+    });
+    context.subscriptions.push({ dispose: () => backend.stop() });
 
     // アクティブエディタ変更イベントの監視（ファイル切り替え時の自動追従）
     vscode.window.onDidChangeActiveTextEditor((editor) => {
