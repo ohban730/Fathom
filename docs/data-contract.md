@@ -12,7 +12,7 @@
 dedoubt/parser.py (AST解析)
    └─ CodeChunk オブジェクト
         └─ dedoubt/core.py が dict化してセッション情報に同梱
-             └─ main.py (リポジトリルート, FastAPI, http://127.0.0.1:8000)
+             └─ main.py (vscode-extension/配下, FastAPI, http://127.0.0.1:8000)
                   └─ Webview (index.html) が fetch() で直接HTTPを叩く
                        └─ 星座マップ・質問・採点結果を描画
 
@@ -23,15 +23,15 @@ vscode-extension/src/extension.ts
 
 **拡張機能ホスト(`extension.ts`)はChunk/セッション/スコアのデータを中継していません。** Webviewはアクティブファイルが切り替わったことだけを拡張ホストから知らされ、そのあとは自分でFastAPIサーバーに直接HTTPリクエストを投げてすべてのデータを取得します。
 
-FastAPIアプリの実体は[`main.py`](../main.py)（リポジトリルート）で、`python main.py`で起動する。**現状は手動起動が前提**で、拡張機能側に自動起動の仕組みはない。
+FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-extension/main.py`)で、`python main.py`で起動する。`dedoubt/`パッケージもmain.pyと同じ`vscode-extension/`配下に同居させている(2026-08-09に移動)。理由: `vsce package`(拡張機能の配布パッケージ作成)は`vscode-extension/`配下しか対象にしないため、Pythonバックエンドをこの外に置いたままでは配布物に含まれない。
 
-> 過去には`server/`ディレクトリ(`server_app.py`, `run_server.py`, `server/run.py`, `server/test_server.py`)が存在し、いずれも存在しない`server/main.py`を`from server.main import app` / `from main import app`でインポートしようとする死んだコードだった(実行すると全て`ModuleNotFoundError`)。おそらく`main.py`を`server/`配下へ移す途中で放棄されたリファクタリングの残骸。2026-08-09に削除済み。実際に動いているのは常にリポジトリルートの`main.py`。
+> 過去には`server/`ディレクトリ(`server_app.py`, `run_server.py`, `server/run.py`, `server/test_server.py`)が存在し、いずれも存在しない`server/main.py`を`from server.main import app` / `from main import app`でインポートしようとする死んだコードだった(実行すると全て`ModuleNotFoundError`)。おそらく`main.py`を`server/`配下へ移す途中で放棄されたリファクタリングの残骸。2026-08-09に削除済み。
 
 ---
 
 ## 1. CodeChunk — 解析結果の中核オブジェクト
 
-出典: [`dedoubt/parser.py`](../dedoubt/parser.py) の `CodeChunk` dataclass（`to_dict()`でこの形のdictになる）。
+出典: [`dedoubt/parser.py`](../vscode-extension/dedoubt/parser.py) の `CodeChunk` dataclass（`to_dict()`でこの形のdictになる）。
 
 ```json
 {
@@ -62,7 +62,7 @@ FastAPIアプリの実体は[`main.py`](../main.py)（リポジトリルート�
 
 ## 2. 境界①: Python解析層 → セッション初期化レスポンス
 
-出典: [`dedoubt/core.py`](../dedoubt/core.py) `DeDoubtCore.start_session_for_file()`。
+出典: [`dedoubt/core.py`](../vscode-extension/dedoubt/core.py) `DeDoubtCore.start_session_for_file()`。
 
 ```json
 {
@@ -87,13 +87,13 @@ FastAPIアプリの実体は[`main.py`](../main.py)（リポジトリルート�
 }
 ```
 
-`project`/`session`のフィールドは [`dedoubt/db.py`](../dedoubt/db.py) の `projects`/`sessions` テーブル定義そのまま（SQLite行を`dict()`化したもの）。
+`project`/`session`のフィールドは [`dedoubt/db.py`](../vscode-extension/dedoubt/db.py) の `projects`/`sessions` テーブル定義そのまま（SQLite行を`dict()`化したもの）。
 
 ---
 
-## 3. 境界②: FastAPI サーバー (リポジトリルート `main.py`)
+## 3. 境界②: FastAPI サーバー (`vscode-extension/main.py`)
 
-Webview (`index.html`) 内の `API_BASE = "http://127.0.0.1:8000"` への `fetch()` 呼び出しを起点に整理。実装は[`main.py`](../main.py)。
+Webview (`index.html`) 内の `API_BASE = "http://127.0.0.1:8000"` への `fetch()` 呼び出しを起点に整理。実装は[`main.py`](../vscode-extension/main.py)。
 
 エラー時は`{"status":"error", ...}`ではなく、FastAPIの`HTTPException`による標準エラーボディ`{"detail": "string"}`（HTTP 404または500）を返す。Webview側は`json.status === 'success'`でしか分岐していないため、これでも「失敗」判定は正しく効くが、エラーメッセージ自体(`detail`)は現在どこにも表示されずトースト文言に固定されている。
 
@@ -121,7 +121,7 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
   }
 }
 ```
-`rubric`の`max`合計は常に100になる想定（[`dedoubt/llm.py`](../dedoubt/llm.py) `build_question_prompt`のプロンプト制約）。
+`rubric`の`max`合計は常に100になる想定（[`dedoubt/llm.py`](../vscode-extension/dedoubt/llm.py) `build_question_prompt`のプロンプト制約）。
 
 ### `POST /api/answer/evaluate`
 - リクエスト: `{ "session_id": "int", "chunk": <CodeChunk dict>, "question_data": <question/generateのdata>, "user_answer": "string", "target_score": "int" }`
@@ -145,7 +145,7 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
 }
 ```
 
-**スコアはここで計算される**（[`dedoubt/core.py`](../dedoubt/core.py) `evaluate_answer_and_save`）: `score_details`が返ってきた場合はサーバー側で各項目の`score`を合算して`score`を再計算する（LLMが返した`score`トップレベル値は`score_details`が空のときのフォールバックとしてのみ使う）。「わからない」等の無解回答は`is_unknown_or_empty_answer()`により即座に全項目0点。
+**スコアはここで計算される**（[`dedoubt/core.py`](../vscode-extension/dedoubt/core.py) `evaluate_answer_and_save`）: `score_details`が返ってきた場合はサーバー側で各項目の`score`を合算して`score`を再計算する（LLMが返した`score`トップレベル値は`score_details`が空のときのフォールバックとしてのみ使う）。「わからない」等の無解回答は`is_unknown_or_empty_answer()`により即座に全項目0点。
 
 ### `GET /api/analytics/{project_id}`
 ```json
@@ -204,4 +204,4 @@ Webview → ホスト:
 
 ## 6. 「デモ固有ロジック禁止」ルールとの関係
 
-[`CLAUDE.md`](../CLAUDE.md) の「No Demo-Specific Logic」ルールは、この契約があることで機械的にチェックしやすくなる。例えば `MockLLMClient.ask()`（[`dedoubt/llm.py`](../dedoubt/llm.py)）は `"名前: __main__"` や `"名前: divide_with_raise"` のようにプロンプト文字列へ特定のChunk名が含まれるかで分岐しているが、これは**デモ用フォールバック実装として明示されている**ものであり、本番の採点経路（Ollama接続時）はこの分岐を通らない。新しいスコアリングロジックを実装する際は、`MockLLMClient`ではなく`OllamaClient`経路、または本ドキュメントのスキーマに対するプロパティベーステストで検証すること。
+[`CLAUDE.md`](../CLAUDE.md) の「No Demo-Specific Logic」ルールは、この契約があることで機械的にチェックしやすくなる。例えば `MockLLMClient.ask()`（[`dedoubt/llm.py`](../vscode-extension/dedoubt/llm.py)）は `"名前: __main__"` や `"名前: divide_with_raise"` のようにプロンプト文字列へ特定のChunk名が含まれるかで分岐しているが、これは**デモ用フォールバック実装として明示されている**ものであり、本番の採点経路（Ollama接続時）はこの分岐を通らない。新しいスコアリングロジックを実装する際は、`MockLLMClient`ではなく`OllamaClient`経路、または本ドキュメントのスキーマに対するプロパティベーステストで検証すること。
