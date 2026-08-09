@@ -538,6 +538,29 @@
         .replace(/"/g, "&quot;");
     }
 
+    // Mermaidの図種別宣言(graph TD等)を認識するための正規表現。
+    // ローカルLLMはこの宣言行を省略して出力することがあり、省略されるとMermaidの
+    // strictパーサーが解析に失敗し、生テキストがそのまま表示されてしまうため、
+    // 無い場合はデフォルトの "graph TD" を自動補完する。
+    const MERMAID_DIAGRAM_TYPE_RE = /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram(-v2)?|erDiagram|gantt|pie|journey|mindmap|timeline|quadrantChart|gitGraph)\b/;
+
+    // LLMがノードラベル([...] / (...) / {...})内に丸括弧・コロン等の特殊文字を
+    // クォートなしで出力すると、Mermaidの構文エラーになりフォールバック表示になってしまう。
+    // ラベル内容にそうした文字が含まれる場合は自動的にダブルクォートで囲んで無害化する。
+    function sanitizeMermaidNodeLabels(text) {
+      const wrapIfNeeded = (inner) => {
+        const trimmed = inner.trim();
+        if (trimmed.startsWith('"') && trimmed.endsWith('"')) return inner;
+        if (!/[():{}#;,|"'：（）]/.test(trimmed)) return inner;
+        const escaped = trimmed.replace(/"/g, '#quot;');
+        return `"${escaped}"`;
+      };
+      return text
+        .replace(/\[([^\[\]]+)\]/g, (m, inner) => `[${wrapIfNeeded(inner)}]`)
+        .replace(/\{([^{}]+)\}/g, (m, inner) => `{${wrapIfNeeded(inner)}}`)
+        .replace(/\(([^()]+)\)/g, (m, inner) => `(${wrapIfNeeded(inner)})`);
+    }
+
     // Mermaid図を指定コンテナへ描画する共通ヘルパー（通常表示・拡大モーダルの両方から利用）
     async function renderMermaidInto(container, diagramText) {
       if (!diagramText) {
@@ -545,7 +568,12 @@
         return;
       }
       try {
-        const cleanDiagram = diagramText.replace(/```mermaid/g, '').replace(/```/g, '').trim();
+        let cleanDiagram = diagramText.replace(/```mermaid/g, '').replace(/```/g, '').trim();
+        if (!MERMAID_DIAGRAM_TYPE_RE.test(cleanDiagram)) {
+          cleanDiagram = `graph TD\n${cleanDiagram}`;
+        }
+        const [firstLine, ...restLines] = cleanDiagram.split('\n');
+        cleanDiagram = [firstLine, sanitizeMermaidNodeLabels(restLines.join('\n'))].join('\n');
         const pre = document.createElement('pre');
         pre.className = 'mermaid';
         pre.textContent = cleanDiagram;
@@ -807,24 +835,47 @@
       document.getElementById('compose-bar').style.opacity = enabled ? '1' : '0.5';
     }
 
+    // Python標準の組み込み関数・予約語など、検索候補としての価値が低いものを除外するための一覧。
+    // 特定のデモファイルにひもづくキーワードではなく、汎用的な「よくある組み込み識別子・構文キーワード」のみを載せる。
+    const COMMON_BUILTIN_NAMES = new Set([
+      "print", "len", "range", "enumerate", "str", "int", "float", "bool", "list", "dict",
+      "set", "tuple", "open", "isinstance", "super", "zip", "map", "filter", "sorted", "type",
+      "min", "max", "sum", "abs", "round", "format", "join", "append", "items", "keys", "values",
+      "get", "split", "strip", "replace",
+      "if", "elif", "while", "for", "def", "class", "return", "except", "with", "and", "or",
+      "not", "lambda", "yield", "assert", "del", "global", "nonlocal", "raise", "pass", "break",
+      "continue", "try", "finally", "else", "in", "is", "async", "await"
+    ]);
+
     // ── 個別ピンポイント検索キーワードの分解生成 ──
+    // 特定のデモコード（例外処理系のサンプル等）に依存した固定語リストではなく、
+    // 対象Chunkのコードから実際に使われている関数呼び出し・クラス名を汎用的に抽出して候補にする。
     function buildIndividualSearchItems() {
       if (!state.sessionData) return [];
       const chunk = state.sessionData.chunks[state.currentChunkIdx];
       const code = chunk.code_segment || "";
-      const missTags = state.lastEvalForChunk?.miss_categories || [];
 
       const items = [];
-      const techTokens = ["isinstance", "TypeError", "ValueError", "ZeroDivisionError", "raise", "assert"];
-      techTokens.forEach(token => {
-        if (code.includes(token)) {
-          items.push({ label: `Python ${token} 使い方`, query: `Python ${token} 使い方` });
-        }
-      });
+      const seen = new Set();
 
+      const callPattern = /\b([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g;
+      let match;
+      while ((match = callPattern.exec(code)) !== null) {
+        const dotted = match[1];
+        const shortName = dotted.includes(".") ? dotted.split(".").pop() : dotted;
+        if (!shortName || shortName === chunk.name || COMMON_BUILTIN_NAMES.has(shortName) || seen.has(shortName)) continue;
+        seen.add(shortName);
+        items.push({ label: `Python ${shortName} 使い方`, query: `Python ${shortName} 使い方` });
+      }
+
+      const missTags = state.lastEvalForChunk?.miss_categories
+        || state.projectAnalytics?.chunk_summary?.[chunk.name]?.last_miss_categories
+        || [];
       missTags.forEach(tag => {
-        const cleanTag = tag.replace(/の見落とし/g, '').replace(/の欠落/g, '');
-        items.push({ label: `Python ${cleanTag} 例外処理`, query: `Python ${cleanTag} 例外処理` });
+        const cleanTag = tag.replace(/の見落とし/g, '').replace(/の欠落/g, '').replace(/の不足/g, '');
+        if (seen.has(cleanTag)) return;
+        seen.add(cleanTag);
+        items.push({ label: `Python ${cleanTag}`, query: `Python ${cleanTag} とは` });
       });
 
       return items;
@@ -833,7 +884,9 @@
     function buildLLMPrompt() {
       if (!state.sessionData) return "";
       const chunk = state.sessionData.chunks[state.currentChunkIdx];
-      return `以下のPythonコードについて学習しています。コードの検証ロジックや仕様について学んでいますが、答えを直接言わずに、私が自力で理解するための考え方のヒントと関連する文法解説だけを教えてください。\n\n【対象コード】\n${chunk.code_segment}`;
+      const question = state.currentQuestion?.question || "";
+      const questionPart = question ? `\n\n【出題された質問】\n${question}` : "";
+      return `以下のPythonコードについて学習しています。出題された質問に対して、答えを直接言わずに、私が自力で理解するための考え方のヒントと関連する文法・ライブラリの解説だけを教えてください。\n\n【対象コード】\n${chunk.code_segment}${questionPart}`;
     }
 
     function copyText(str) {
@@ -1052,8 +1105,13 @@
 
       // 再挑戦時: 着眼点ガイド ＆ ピンポイント検索チップをシステムバブルとして追記
       if (isRetryForChunk) {
-        const missTags = state.lastEvalForChunk?.miss_categories || ['例外クラス名の明記', '戻り値仕様の欠落'];
-        const feedback = state.lastEvalForChunk?.feedback || '前回このChunkは要復習でした。コードの条件式と例外処理に注目しましょう。';
+        const pastSummary = state.projectAnalytics?.chunk_summary?.[chunk.name];
+        const missTags = state.lastEvalForChunk?.miss_categories
+          || pastSummary?.last_miss_categories
+          || [];
+        const feedback = state.lastEvalForChunk?.feedback
+          || pastSummary?.last_feedback
+          || '前回このChunkは要復習でした。コードをもう一度読み直してみましょう。';
         const searchItems = buildIndividualSearchItems();
         const llmPrompt = buildLLMPrompt();
 

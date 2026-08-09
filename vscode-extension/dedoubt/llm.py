@@ -353,6 +353,15 @@ class MockLLMClient(LLMClient):
 # ──────────────────────────────────────────
 
 def build_question_prompt(chunk: CodeChunk, axis: str = "構造軸", difficulty: str = "標準", mode: str = "しっかり") -> str:
+    related_note = ""
+    if chunk.calls:
+        related_note = f"""
+【重要: 関連Chunkとの役割分担】
+このChunkは {", ".join(chunk.calls)} を呼び出していますが、これらは別のコードChunkとして個別に出題されます。
+そちらの内部実装（条件分岐・計算式・例外処理など）を問う質問は絶対に作らないでください。
+このChunk自身が担う範囲（呼び出す順序、渡すデータ、受け取った結果をどう次に使うか、全体の流れの中での役割）にのみ焦点を当ててください。
+"""
+
     return f"""あなたはソフトウェア開発者のコード理解度を判定する試験官です。
 【タスク: 質問生成】
 
@@ -364,15 +373,17 @@ def build_question_prompt(chunk: CodeChunk, axis: str = "構造軸", difficulty:
 ```python
 {chunk.code_segment}
 ```
-
+{related_note}
 【指定条件】
 - 質問の軸: {axis}（構造軸=関数内の引数・処理順序・戻り値 / 関係軸=他関数との呼び出し関係）
 - 難易度: {difficulty}（基礎 / 標準 / 応用）
 - 学習モード: {mode}
+- 質問文は1つの論点に絞り、簡潔な1〜2文にしてください。「1. 2.」のような複数の問いを1つの質問に詰め込むことは禁止します。
 
 【要求出力フォーマット (必ず以下のJSONのみを出力してください)】
 ※ `rubric` にはこのコードChunkで検証すべき固有の項目（合計100点満点になるように3〜4項目）を定義してください。
 ※ `mermaid_diagram` には ```mermaid マークダウンは含めず、純粋なMermaidの定義テキストのみを出力してください。
+※ `mermaid_diagram` は必ず1行目に `graph TD` または `sequenceDiagram` などの図種別宣言を書いてください（省略するとパースに失敗します）。
 ```json
 {{
   "question": "質問文テキスト",

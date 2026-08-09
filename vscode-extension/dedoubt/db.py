@@ -233,7 +233,8 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
                     "max_score": score,
                     "attempts": 1,
                     "last_passed": passed,
-                    "last_feedback": r["feedback"]
+                    "last_feedback": r["feedback"],
+                    "last_miss_categories": misses
                 }
             else:
                 chunk_summary[chunk]["latest_score"] = score
@@ -241,6 +242,7 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
                 chunk_summary[chunk]["attempts"] += 1
                 chunk_summary[chunk]["last_passed"] = passed
                 chunk_summary[chunk]["last_feedback"] = r["feedback"]
+                chunk_summary[chunk]["last_miss_categories"] = misses
 
             for m in misses:
                 all_miss_categories[m] = all_miss_categories.get(m, 0) + 1
