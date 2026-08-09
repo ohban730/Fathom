@@ -19,11 +19,30 @@ class LLMClient(ABC):
     def ask(self, prompt: str) -> str:
         pass
 
+def list_ollama_models(base_url: str = "http://localhost:11434") -> List[str]:
+    """Ollamaに実際にpull済みのモデル名一覧を取得する。未起動・取得失敗時は空リスト。"""
+    try:
+        response = requests.get(f"{base_url}/api/tags", timeout=5)
+        response.raise_for_status()
+        return [m["name"] for m in response.json().get("models", [])]
+    except Exception:
+        return []
+
 class OllamaClient(LLMClient):
-    """Ollama用の実実装"""
-    def __init__(self, model: str = "llama3", base_url: str = "http://localhost:11434"):
-        self.model = model
+    """Ollama用の実実装。
+
+    modelを明示しない場合、特定のモデル名（例: "llama3"）をハードコードせず、
+    実際にpull済みのモデルから自動選択する（ユーザーの環境ごとに異なるため）。
+    """
+    def __init__(self, model: Optional[str] = None, base_url: str = "http://localhost:11434"):
         self.base_url = base_url
+        if model:
+            self.model = model
+        else:
+            available = list_ollama_models(base_url)
+            if not available:
+                raise RuntimeError("Ollamaに接続できないか、pull済みのモデルが1つもありません。")
+            self.model = available[0]
 
     def ask(self, prompt: str) -> str:
         try:
@@ -35,7 +54,7 @@ class OllamaClient(LLMClient):
                     "stream": False,
                     "options": {"temperature": 0.0}
                 },
-                timeout=35
+                timeout=120
             )
             response.raise_for_status()
             return response.json().get("response", "")

@@ -18,7 +18,7 @@ if ROOT_DIR not in sys.path:
 
 from dedoubt.core import DeDoubtCore
 from dedoubt.parser import CodeChunk
-from dedoubt.llm import OllamaClient, MockLLMClient, is_unknown_or_empty_answer
+from dedoubt.llm import OllamaClient, MockLLMClient, is_unknown_or_empty_answer, list_ollama_models
 from dedoubt.db import get_qa_histories_for_session, get_chunk_history_summary, get_recent_projects
 
 app = FastAPI(
@@ -58,6 +58,9 @@ class AnswerEvaluateRequest(BaseModel):
     user_answer: str
     target_score: int = 70
 
+class OllamaModelSetRequest(BaseModel):
+    model: str
+
 # ──────────────────────────────────────────
 # API エンドポイント
 # ──────────────────────────────────────────
@@ -83,6 +86,27 @@ def health_check():
         "engine": engine_name,
         "db_path": DB_PATH
     }
+
+@app.get("/api/ollama/models")
+def ollama_models():
+    """pull済みのOllamaモデル一覧と現在使用中のモデルを返す(UIのモデル選択ドロップダウン用)"""
+    return {
+        "status": "success",
+        "available": list_ollama_models(),
+        "current_model": core.llm.model if isinstance(core.llm, OllamaClient) else None,
+        "using_ollama": isinstance(core.llm, OllamaClient)
+    }
+
+@app.post("/api/ollama/model")
+def set_ollama_model(req: OllamaModelSetRequest):
+    """使用するOllamaモデルを切り替える。Mockエンジン状態からの復帰(再接続)もこの経路で試みる"""
+    try:
+        new_client = OllamaClient(model=req.model)
+        new_client.ask("test connection")
+        core.llm = new_client
+        return {"status": "success", "engine": f"Ollama ({core.llm.model})"}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"モデルへの接続に失敗しました: {str(e)}")
 
 @app.post("/api/session/start")
 def start_session(req: SessionStartRequest):

@@ -33,11 +33,12 @@ class DeDoubtCore:
         if llm_client:
             self.llm = llm_client
         else:
-            # デフォルトで OllamaClient を使用し、接続不可なら MockLLMClient に切り替え
+            # デフォルトで OllamaClient を使用し、接続不可なら MockLLMClient に切り替え。
+            # OllamaClient()自体の内部で/api/tagsによる疎通確認を行うため、ここでは
+            # 実際にプロンプトを送って生成させない(大きいモデルの初回ロードで
+            # 数十秒かかることがあり、起動時のテストとしては重すぎるため)。
             try:
-                client = OllamaClient()
-                client.ask("test connection")
-                self.llm = client
+                self.llm = OllamaClient()
             except Exception:
                 self.llm = MockLLMClient()
 

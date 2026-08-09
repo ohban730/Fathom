@@ -199,6 +199,7 @@
       <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-brand-card border border-brand-border text-brand-muted">
         Engine: <span id="engine-badge" class="text-indigo-300 font-semibold">Connecting...</span>
       </span>
+      <select id="select-ollama-model" class="hidden bg-brand-bg text-brand-text text-xs border border-brand-border rounded px-2 py-1 focus:outline-none focus:border-indigo-400" title="採点・質問生成に使うOllamaモデルを切り替える"></select>
       <span id="file-path-badge" class="text-xs font-mono text-brand-muted truncate max-w-[260px]" title="">
         📁 読み込み中...
       </span>
@@ -219,6 +220,11 @@
       </div>
     </div>
   </header>
+
+  <div id="mock-mode-banner" class="hidden mb-4 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
+    <span>⚠️</span>
+    <span>Mockエンジン動作中: 採点・質問はデモ用の固定フィードバックで、コード内容は実際には評価されていません。Ollamaが起動しモデルがpull済みか確認してください。</span>
+  </div>
 
   <!-- ──────────────────────────────────────────
       ビュー1: 初期ロード / 準備中
@@ -463,6 +469,10 @@
       document.getElementById('select-difficulty').addEventListener('change', (e) => {
         state.difficulty = e.target.value;
         loadQuestion();
+      });
+
+      document.getElementById('select-ollama-model').addEventListener('change', (e) => {
+        switchOllamaModel(e.target.value);
       });
 
       document.getElementById('btn-recent-files').addEventListener('click', () => {
@@ -832,12 +842,67 @@
     }
 
     async function checkHealth() {
+      const badge = document.getElementById('engine-badge');
+      const banner = document.getElementById('mock-mode-banner');
+      const modelSelect = document.getElementById('select-ollama-model');
       try {
         const res = await fetch(`${API_BASE}/api/health`, { cache: 'no-store' });
         const data = await res.json();
-        document.getElementById('engine-badge').innerText = data.engine;
+        badge.innerText = data.engine;
+
+        const isMock = !data.engine || data.engine.includes('Mock');
+        badge.classList.toggle('text-indigo-300', !isMock);
+        badge.classList.toggle('text-amber-300', isMock);
+        banner.classList.toggle('hidden', !isMock);
+
+        if (isMock) {
+          modelSelect.classList.add('hidden');
+        } else {
+          await refreshOllamaModelOptions();
+        }
       } catch(e) {
-        document.getElementById('engine-badge').innerText = "Disconnected (Port 8000)";
+        badge.innerText = "Disconnected (Port 8000)";
+        banner.classList.add('hidden');
+        modelSelect.classList.add('hidden');
+      }
+    }
+
+    // Ollamaのpull済みモデル一覧を取得し、ドロップダウンを最新化する
+    async function refreshOllamaModelOptions() {
+      const modelSelect = document.getElementById('select-ollama-model');
+      try {
+        const res = await fetch(`${API_BASE}/api/ollama/models`, { cache: 'no-store' });
+        const data = await res.json();
+        if (data.status !== 'success' || !data.using_ollama) {
+          modelSelect.classList.add('hidden');
+          return;
+        }
+        modelSelect.innerHTML = (data.available || []).map(m =>
+          `<option value="${escapeHtml(m)}" ${m === data.current_model ? 'selected' : ''}>${escapeHtml(m)}</option>`
+        ).join('');
+        modelSelect.classList.remove('hidden');
+      } catch(e) {
+        modelSelect.classList.add('hidden');
+      }
+    }
+
+    async function switchOllamaModel(model) {
+      const badge = document.getElementById('engine-badge');
+      try {
+        const res = await fetch(`${API_BASE}/api/ollama/model`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+          badge.innerText = data.engine;
+          showToast(`モデルを切り替えました: ${model}`);
+        } else {
+          showToast('モデルの切り替えに失敗しました');
+        }
+      } catch(e) {
+        showToast('モデルの切り替えに失敗しました');
       }
     }
 
