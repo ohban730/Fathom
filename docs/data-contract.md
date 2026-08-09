@@ -36,7 +36,7 @@ FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-ext
 ```json
 {
   "name": "string",
-  "chunk_type": "function | class | entrypoint",
+  "chunk_type": "function | class | entrypoint | nested_function | nested_class",
   "start_line": "int (1-based)",
   "end_line": "int (1-based, inclusive)",
   "code_segment": "string — 該当行のソースコードそのまま",
@@ -49,14 +49,18 @@ FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-ext
 
 | フィールド | 必須/オプション | 補足 |
 |---|---|---|
-| `name` | 必須 | 関数名・クラス名。entrypointの場合は `"__main__"`（`if __name__ == "__main__":` ガードのみのとき）または `"モジュールの実行フロー"`（それ以外のトップレベル文がある場合）。**ファイル内で高々1つ**。 |
-| `chunk_type` | 必須 | `"function"` \| `"class"` \| `"entrypoint"` の3値のみ。 |
-| `args` | 必須（配列は常に存在） | `function`のみ実引数名が入る。`class`/`entrypoint`は常に`[]`。 |
-| `docstring` | オプション（既定`null`） | `function`/`class`のみ。`entrypoint`は常に`null`。 |
-| `methods` | オプション（既定`null`） | `class`のみメソッド名一覧。`function`/`entrypoint`は`null`（`[]`ではない点に注意）。 |
-| `calls` | 必須（配列は常に存在、既定`[]`） | このChunkのトップレベルコードから**直接呼び出している**他Chunk名（`foo()`形式のみ検出。`obj.method()`のような属性呼び出しは対象外）。自己再帰は除外。2パス目で全Chunk名確定後に解決するため定義順に依存しない。 |
+| `name` | 必須 | 関数名・クラス名。entrypointの場合は `"__main__"`（`if __name__ == "__main__":` ガードのみのとき）または `"モジュールの実行フロー"`（それ以外のトップレベル文がある場合）。トップレベルentrypointは**ファイル内で高々1つ**。 |
+| `chunk_type` | 必須 | `"function"` \| `"class"` \| `"entrypoint"` \| `"nested_function"` \| `"nested_class"` の5値のみ。関数・クラスの内部で定義された関数・クラス（入れ子）は、任意の深さまで`nested_function`/`nested_class`として個別Chunk化される（2026-08-09追加）。 |
+| `args` | 必須（配列は常に存在） | `function`/`nested_function`のみ実引数名が入る。`class`/`nested_class`/`entrypoint`は常に`[]`。 |
+| `docstring` | オプション（既定`null`） | `function`/`class`/`nested_function`/`nested_class`のみ。`entrypoint`は常に`null`。 |
+| `methods` | オプション（既定`null`） | `class`/`nested_class`のみメソッド名一覧。それ以外は`null`（`[]`ではない点に注意）。 |
+| `calls` | 必須（配列は常に存在、既定`[]`） | このChunk自身のコードから**直接呼び出している**他Chunk名（`foo()`形式のみ検出。`obj.method()`のような属性呼び出しは対象外）。自己再帰は除外。**ネストされた関数・クラス定義の内部の呼び出しは、その入れ子Chunk自身に属するため、外側のChunkの`calls`には含まれない**(重複防止)。2パス目で全Chunk名確定後に解決するため定義順に依存しない。 |
+
+**入れ子構造の例**: `def main(): ... def tokenize(): ...(mainの内部) ...` という書き方の場合、`main`(chunk_type=`function`)と`tokenize`(chunk_type=`nested_function`)は別々のChunkになり、`tokenize`内で行われる呼び出しは`tokenize`自身の`calls`にのみ現れ、`main`の`calls`には現れない。同じ名前の関数・クラスがネストの内外や別々の外側関数の中で重複して存在する場合、`name`だけでは一意に識別できない(Chunk名はスコープを区別しないグローバルな文字列キーのため)。これは既存の設計上の制約であり、今のところ対応していない。
 
 **スコアはここでは計算されない。** CodeChunkはAST解析結果のみを保持し、採点は境界3（`/api/answer/evaluate`）でのみ発生する。
+
+**実装意図: `calls`の方向とChunk番号(星の並び順)は無関係。** 星座マップ([index.html](../vscode-extension/src/webview/index.html)の`renderConstellation()`)は`calls`を「呼び出し元→呼び出し先」の矢印として描画する。Chunkは基本的にファイル内の出現順(定義順)に並ぶため、典型的なPythonファイル(先に関数を定義し、最後に`__main__`でそれらを呼ぶ)では矢印は必然的に「番号の大→小」(entrypointから前方の関数へ)を向く。これは実際の呼び出し関係として正しい表示であり、「番号の小→大に矢印を統一する」といった変更は呼び出し方向を偽って表示することになるため行わない。UI側にもこの前提を示す注記(点線の凡例)を表示している(2026-08-09追加)。将来、番号順=読む順という分かりやすさを崩さずに呼び出しトポロジーを表現したい場合は、矢印方向を変えるのではなく星の並び順自体を再検討すること。
 
 ---
 

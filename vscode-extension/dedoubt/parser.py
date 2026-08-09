@@ -12,7 +12,7 @@ from typing import List, Optional
 @dataclass
 class CodeChunk:
     name: str
-    chunk_type: str  # 'function' | 'class' | 'entrypoint'
+    chunk_type: str  # 'function' | 'class' | 'entrypoint' | 'nested_function' | 'nested_class'
     start_line: int
     end_line: int
     code_segment: str
@@ -47,14 +47,76 @@ def _is_main_guard(node: ast.AST) -> bool:
     )
 
 def _called_names(nodes: List[ast.AST]) -> set:
-    """ノード群の中で直接呼び出されている識別子名（`foo()`形式のみ）を収集する。
+    """ノード群の中で直接呼び出されている識別子名（`foo()`形式のみ）を、
+    ネストされた関数・クラス定義の内部は除外して収集する。
+    ネスト定義内の呼び出しはそのネスト定義自身のChunkに属するため、
+    外側のChunkの呼び出し検出に重複して含めない。
     `obj.method()`のような属性呼び出しは、無関係な同名関数との誤検出を避けるため対象外とする。"""
     called = set()
+
+    def walk(node: ast.AST, is_root: bool) -> None:
+        # is_root=Falseでこのnode自体がネストされた関数・クラス定義の場合、
+        # その内部はそのネスト定義自身のChunkが担当するため辿らない
+        if not is_root and isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            return
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            called.add(node.func.id)
+        for child in ast.iter_child_nodes(node):
+            walk(child, is_root=False)
+
     for node in nodes:
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
-                called.add(child.func.id)
+        walk(node, is_root=True)
     return called
+
+def _iter_nested_defs(node: ast.AST):
+    """nodeの内部に直接ネストされている関数・クラス定義を列挙する（if/for/try等の制御構文は辿るが、
+    見つかった定義自身の内部にはこの関数では立ち入らない。さらに深いネストは呼び出し元が再帰処理する）。"""
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.FunctionDef, ast.ClassDef)):
+            yield child
+        elif isinstance(child, (ast.Import, ast.ImportFrom)):
+            continue
+        else:
+            yield from _iter_nested_defs(child)
+
+def _build_def_chunk(node, lines: List[str], nested: bool) -> CodeChunk:
+    """FunctionDef/ClassDefノードから1つのCodeChunkを作る（トップレベル/ネストで種別を切り替える）"""
+    segment_lines = lines[node.lineno - 1 : node.end_lineno]
+    segment_code = "\n".join(segment_lines)
+    docstring = ast.get_docstring(node)
+
+    if isinstance(node, ast.FunctionDef):
+        return CodeChunk(
+            name=node.name,
+            chunk_type="nested_function" if nested else "function",
+            start_line=node.lineno,
+            end_line=node.end_lineno,
+            code_segment=segment_code,
+            args=[arg.arg for arg in node.args.args],
+            docstring=docstring,
+        )
+    else:
+        methods = [n.name for n in node.body if isinstance(n, ast.FunctionDef)]
+        return CodeChunk(
+            name=node.name,
+            chunk_type="nested_class" if nested else "class",
+            start_line=node.lineno,
+            end_line=node.end_lineno,
+            code_segment=segment_code,
+            args=[],
+            docstring=docstring,
+            methods=methods,
+        )
+
+def _collect_def_chunks(node, lines: List[str], nested: bool, chunks: List[CodeChunk], chunk_source_nodes: List[tuple]) -> None:
+    """nodeを1つのChunkとして追加し、node内部にさらにネストされた関数・クラス定義があれば
+    再帰的に(任意の深さまで) 別のChunkとして切り出す"""
+    chunk = _build_def_chunk(node, lines, nested)
+    chunks.append(chunk)
+    chunk_source_nodes.append((chunk, [node]))
+
+    for nested_def in _iter_nested_defs(node):
+        _collect_def_chunks(nested_def, lines, True, chunks, chunk_source_nodes)
 
 def parse_code_chunks(file_path: str) -> List[CodeChunk]:
     """ソースコードファイルから CodeChunk のリストを生成"""
@@ -69,47 +131,10 @@ def parse_code_chunks(file_path: str) -> List[CodeChunk]:
     chunk_source_nodes: List[tuple] = []
 
     for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.FunctionDef):
-            # トップレベル関数
-            segment_lines = lines[node.lineno - 1 : node.end_lineno]
-            segment_code = "\n".join(segment_lines)
-            args = [arg.arg for arg in node.args.args]
-            docstring = ast.get_docstring(node)
-
-            chunk = CodeChunk(
-                name=node.name,
-                chunk_type="function",
-                start_line=node.lineno,
-                end_line=node.end_lineno,
-                code_segment=segment_code,
-                args=args,
-                docstring=docstring,
-            )
-            chunks.append(chunk)
-            chunk_source_nodes.append((chunk, [node]))
-
-        elif isinstance(node, ast.ClassDef):
-            # クラス定義
-            segment_lines = lines[node.lineno - 1 : node.end_lineno]
-            segment_code = "\n".join(segment_lines)
-            methods = [
-                n.name for n in node.body
-                if isinstance(n, ast.FunctionDef)
-            ]
-            docstring = ast.get_docstring(node)
-
-            chunk = CodeChunk(
-                name=node.name,
-                chunk_type="class",
-                start_line=node.lineno,
-                end_line=node.end_lineno,
-                code_segment=segment_code,
-                args=[],
-                docstring=docstring,
-                methods=methods,
-            )
-            chunks.append(chunk)
-            chunk_source_nodes.append((chunk, [node]))
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            # トップレベルの関数・クラス。内部にネストされた関数・クラス定義があれば
+            # 任意の深さまで再帰的に別Chunkとして切り出す
+            _collect_def_chunks(node, lines, False, chunks, chunk_source_nodes)
 
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             # import文は学習対象から除外
@@ -142,6 +167,11 @@ def parse_code_chunks(file_path: str) -> List[CodeChunk]:
         )
         chunks.append(entrypoint_chunk)
         chunk_source_nodes.append((entrypoint_chunk, entrypoint_nodes))
+
+        # entrypoint内(例: if __name__ == "__main__": の中)で定義された関数・クラスも同様に切り出す
+        for en in entrypoint_nodes:
+            for nested_def in _iter_nested_defs(en):
+                _collect_def_chunks(nested_def, lines, True, chunks, chunk_source_nodes)
 
     # 呼び出し関係の検出（全Chunk名が出揃った後の2パス目。定義順に関係なく解決できる）
     known_names = {c.name for c in chunks}
