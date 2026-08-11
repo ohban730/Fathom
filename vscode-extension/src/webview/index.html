@@ -1127,7 +1127,7 @@
       }
     }
 
-    async function startSession() {
+    async function startSession(forceQuiz = false) {
       showView('view-init');
       document.getElementById('thread-messages').innerHTML = '';
       document.getElementById('file-path-badge').innerText = `📁 ${state.filePath.split('\\').pop() || state.filePath.split('/').pop()}`;
@@ -1148,7 +1148,8 @@
           await fetchProjectAnalytics(json.data.project.id);
 
           // 過去のセッションで全Chunk合格済みなら、同じ質問をもう一度解かせず完了画面へ直行する
-          if (state.projectAnalytics && state.projectAnalytics.is_fully_mastered) {
+          // (「再度理解テストを開始」ボタンからの明示的な再挑戦時はforceQuizで素通りを無効化する)
+          if (!forceQuiz && state.projectAnalytics && state.projectAnalytics.is_fully_mastered) {
             loadFinishAnalytics();
             showView('view-finish');
             return;
@@ -1494,7 +1495,7 @@
     }
 
     document.getElementById('btn-restart').addEventListener('click', () => {
-      startSession();
+      startSession(true);
     });
 
     document.getElementById('btn-generate-exploration').addEventListener('click', generateExploration);
