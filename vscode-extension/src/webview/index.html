@@ -91,6 +91,15 @@
     /* ヘッダー等、上に開くスペースがない場所用のバリエーション */
     .popover-content.popover-below { bottom: auto; top: 125%; }
     .popover-content.popover-right { left: auto; right: 0; }
+    /* 長文プロンプトの全文プレビュー用: 折り返し表示 + スクロール */
+    .popover-content.popover-content-wide {
+      width: 420px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    /* コード部分選択時に選択範囲の近くへ追従表示するフローティングパネル */
+    #selection-prompt-popup { position: fixed; z-index: 60; }
 
     /* ── 星図マップ ── */
     @keyframes starPulse {
@@ -299,6 +308,21 @@
         </div>
         <div id="code-snippet-container" class="bg-brand-bg border border-brand-border rounded-lg p-3 text-xs font-mono text-zinc-200 overflow-x-auto flex-1 leading-relaxed">
           <!-- 行番号 ＆ 動的ハイライト付きコード -->
+        </div>
+      </div>
+
+      <!-- コード部分選択時に出現するフローティング操作パネル -->
+      <div id="selection-prompt-popup" class="hidden">
+        <div class="popover-wrapper">
+          <button id="selection-prompt-btn" type="button" class="px-2.5 py-1 rounded-full bg-emerald-500/90 hover:bg-emerald-400 text-black text-[10px] font-bold shadow-lg flex items-center gap-1 whitespace-nowrap">
+            🤖 選択範囲をLLM用プロンプトに
+          </button>
+          <div class="popover-content popover-content-wide popover-below">
+            <span class="text-emerald-400 font-bold block mb-2">🎯 知りたい観点を選ぶ (任意・複数可):</span>
+            <div id="selection-prompt-angles" class="flex flex-wrap gap-1 mb-2"></div>
+            <span class="text-emerald-400 font-bold block mb-1">🤖 コピーされるLLM質問文 (選択範囲):</span>
+            <span id="selection-prompt-preview" class="text-zinc-300 block whitespace-pre-wrap break-words"></span>
+          </div>
         </div>
       </div>
 
@@ -1018,7 +1042,7 @@
                 <button data-copy-llm-prompt class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
                   🤖 ChatGPT/Claude用プロンプトをコピー
                 </button>
-                <div class="popover-content">
+                <div class="popover-content popover-content-wide">
                   <span class="text-emerald-400 font-bold block mb-2">🎯 知りたい観点を選ぶ (任意・複数可):</span>
                   <div class="flex flex-wrap gap-1 mb-2">
                     ${PROMPT_VIEWPOINTS.map((v, vi) => `
@@ -1026,7 +1050,7 @@
                     `).join('')}
                   </div>
                   <span class="text-emerald-400 font-bold block mb-1">🤖 コピーされるLLM質問文:</span>
-                  <span class="text-zinc-300 block truncate max-w-[280px]" data-llm-prompt-preview>${escapeHtml(buildLLMPrompt())}</span>
+                  <span class="text-zinc-300 block whitespace-pre-wrap break-words" data-llm-prompt-preview>${escapeHtml(buildLLMPrompt())}</span>
                 </div>
               </div>
             </div>
@@ -1061,6 +1085,100 @@
       navigator.clipboard.writeText(str);
       showToast(`コピーしました: "${str}"`);
     }
+
+    // ── コード部分選択 → クラウドLLM向け質問プロンプト ──
+    // ライブラリ・API固有の使い方(例: tokenizerの引数の意味など)はDeDoubtの理解度評価スコープ外のため、
+    // ユーザーがコード内の任意区間を選択したら、その区間についてChatGPT/Claude等に投げられる
+    // 質問文を組み立てる。文面と「知りたい観点」チップはbuildLLMPrompt()/PROMPT_VIEWPOINTSと同じものを使い、
+    // 対象コードだけを選択範囲に差し替えることでアクティブラーニングの流れを一貫させる。
+    // 観点(state.selectedPromptAngles)はChunk単位で共有するため、着眼点ガイド側の選択ともここが連動する。
+    function buildSelectionLLMPrompt(selectedText) {
+      const chunk = state.sessionData?.chunks?.[state.currentChunkIdx];
+      const question = state.currentQuestion?.question || "";
+      const questionPart = question ? `\n\n【出題された質問】\n${question}` : "";
+      const angles = Array.from(state.selectedPromptAngles || []);
+      const anglesPart = angles.length > 0
+        ? `\n\n【特に知りたい観点】\n${angles.map(a => `- ${a}`).join('\n')}`
+        : "";
+      const contextPart = chunk
+        ? `\n\n【コード全体(参考): ${chunk.name} L${chunk.start_line}-L${chunk.end_line}】\n${chunk.code_segment}`
+        : "";
+      return `私は以下のPythonコードの一部（抜粋）の内容を、自分の言葉で人に説明できるようになりたいです。答えを直接教えるのではなく、私が自力で理解して説明できるようになるための考え方のヒントと、関連する文法・ライブラリの解説を教えてください。\n\n【対象コードの抜粋】\n${selectedText}${contextPart}${questionPart}${anglesPart}`;
+    }
+
+    const selectionPromptPopup = document.getElementById('selection-prompt-popup');
+    const selectionPromptBtn = document.getElementById('selection-prompt-btn');
+    const selectionPromptPreview = document.getElementById('selection-prompt-preview');
+    let currentSelectionText = '';
+
+    function hideSelectionPromptPopup() {
+      selectionPromptPopup.classList.add('hidden');
+      currentSelectionText = '';
+    }
+
+    function refreshSelectionPromptPreview() {
+      if (currentSelectionText) {
+        selectionPromptPreview.textContent = buildSelectionLLMPrompt(currentSelectionText);
+      }
+    }
+
+    // 「知りたい観点」チップを描画。着眼点ガイド側と同じ state.selectedPromptAngles を共有する。
+    function renderSelectionPromptAngleChips() {
+      const chipsContainer = document.getElementById('selection-prompt-angles');
+      if (!chipsContainer) return;
+      chipsContainer.innerHTML = PROMPT_VIEWPOINTS.map((v, vi) => `
+        <button type="button" data-sel-angle-idx="${vi}" class="prompt-angle-chip px-2 py-0.5 rounded border text-[10px] transition-colors ${state.selectedPromptAngles.has(v) ? 'bg-emerald-500/30 border-emerald-400 text-emerald-100' : 'bg-zinc-800 border-brand-border text-zinc-400 hover:border-emerald-400/50'}">${escapeHtml(v)}</button>
+      `).join('');
+      chipsContainer.querySelectorAll('[data-sel-angle-idx]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const v = PROMPT_VIEWPOINTS[parseInt(btn.getAttribute('data-sel-angle-idx'), 10)];
+          if (state.selectedPromptAngles.has(v)) {
+            state.selectedPromptAngles.delete(v);
+          } else {
+            state.selectedPromptAngles.add(v);
+          }
+          renderSelectionPromptAngleChips();
+          refreshSelectionPromptPreview();
+        });
+      });
+    }
+
+    document.getElementById('code-snippet-container').addEventListener('mouseup', () => {
+      // selectionchangeの反映を待ってから読み取る
+      setTimeout(() => {
+        const container = document.getElementById('code-snippet-container');
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !container.contains(sel.anchorNode)) {
+          hideSelectionPromptPopup();
+          return;
+        }
+        const text = sel.toString().trim();
+        if (!text) {
+          hideSelectionPromptPopup();
+          return;
+        }
+
+        currentSelectionText = text;
+        renderSelectionPromptAngleChips();
+        refreshSelectionPromptPreview();
+
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        const popupWidth = 260;
+        selectionPromptPopup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - popupWidth - 8))}px`;
+        selectionPromptPopup.style.top = `${Math.max(8, rect.top - 34)}px`;
+        selectionPromptPopup.classList.remove('hidden');
+      }, 0);
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      if (!selectionPromptPopup.contains(e.target)) hideSelectionPromptPopup();
+    });
+
+    selectionPromptBtn.addEventListener('click', () => {
+      if (!currentSelectionText) return;
+      copyText(buildSelectionLLMPrompt(currentSelectionText));
+      hideSelectionPromptPopup();
+    });
 
     async function checkHealth() {
       const badge = document.getElementById('engine-badge');
@@ -1245,6 +1363,7 @@
       renderConstellation();
 
       // 動的コード行ハイライト描画エンジン
+      hideSelectionPromptPopup();
       const container = document.getElementById('code-snippet-container');
       const lines = (chunk.code_segment || "").split('\n');
       const startLineNum = chunk.start_line || 1;
