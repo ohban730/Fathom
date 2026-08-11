@@ -445,7 +445,8 @@
       userAnswer: "",
       lastEvalForChunk: null,
       projectAnalytics: null,
-      chunkResults: {} // chunkIdx -> { passed: bool, score: number }
+      chunkResults: {}, // chunkIdx -> { passed: bool, score: number }
+      selectedPromptAngles: new Set() // ChatGPT/Claude用プロンプトに含める観点(Chunkが変わるたびリセット)
     };
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -547,18 +548,56 @@
     // LLMがノードラベル([...] / (...) / {...})内に丸括弧・コロン等の特殊文字を
     // クォートなしで出力すると、Mermaidの構文エラーになりフォールバック表示になってしまう。
     // ラベル内容にそうした文字が含まれる場合は自動的にダブルクォートで囲んで無害化する。
+    // 単純な正規表現(`[^\[\]]+`等)では、`A[入力: examples['ner_tags']]`のように
+    // ラベル内部に同じ種類の括弧がネストして出現するケースを扱えない(内側だけを誤って
+    // 切り出してしまう)ため、開き括弧の直後から深さを数えて対応する閉じ括弧を探す。
     function sanitizeMermaidNodeLabels(text) {
+      const OPEN_TO_CLOSE = { '[': ']', '(': ')', '{': '}' };
+      const idCharRe = /[A-Za-z0-9_]/;
       const wrapIfNeeded = (inner) => {
         const trimmed = inner.trim();
         if (trimmed.startsWith('"') && trimmed.endsWith('"')) return inner;
-        if (!/[():{}#;,|"'：（）]/.test(trimmed)) return inner;
+        if (!/[\[\]():{}#;,|"'：（）]/.test(trimmed)) return inner;
         const escaped = trimmed.replace(/"/g, '#quot;');
         return `"${escaped}"`;
       };
-      return text
-        .replace(/\[([^\[\]]+)\]/g, (m, inner) => `[${wrapIfNeeded(inner)}]`)
-        .replace(/\{([^{}]+)\}/g, (m, inner) => `{${wrapIfNeeded(inner)}}`)
-        .replace(/\(([^()]+)\)/g, (m, inner) => `(${wrapIfNeeded(inner)})`);
+
+      let out = '';
+      let i = 0;
+      while (i < text.length) {
+        const ch = text[i];
+        const prevCh = out.length > 0 ? out[out.length - 1] : '';
+        // ノードID(識別子)に直接続く開き括弧のみをノード定義とみなす
+        if ((ch === '[' || ch === '(' || ch === '{') && idCharRe.test(prevCh)) {
+          const openChar = ch;
+          const closeChar = OPEN_TO_CLOSE[openChar];
+          let depth = 1;
+          let j = i + 1;
+          while (j < text.length && depth > 0) {
+            const c = text[j];
+            if (c === '"') {
+              // 既にクォートされている区間は括弧の深さカウントから除外する
+              j++;
+              while (j < text.length && text[j] !== '"') j++;
+            } else if (c === openChar) {
+              depth++;
+            } else if (c === closeChar) {
+              depth--;
+              if (depth === 0) break;
+            }
+            j++;
+          }
+          if (depth === 0 && j < text.length) {
+            const inner = text.slice(i + 1, j);
+            out += openChar + wrapIfNeeded(inner) + closeChar;
+            i = j + 1;
+            continue;
+          }
+        }
+        out += ch;
+        i++;
+      }
+      return out;
     }
 
     // Mermaid図を指定コンテナへ描画する共通ヘルパー（通常表示・拡大モーダルの両方から利用）
@@ -862,10 +901,21 @@
       let match;
       while ((match = callPattern.exec(code)) !== null) {
         const dotted = match[1];
-        const shortName = dotted.includes(".") ? dotted.split(".").pop() : dotted;
-        if (!shortName || shortName === chunk.name || COMMON_BUILTIN_NAMES.has(shortName) || seen.has(shortName)) continue;
-        seen.add(shortName);
-        items.push({ label: `Python ${shortName} 使い方`, query: `Python ${shortName} 使い方` });
+        const parts = dotted.split(".");
+        const leaf = parts[parts.length - 1];
+        if (!leaf || leaf === chunk.name || COMMON_BUILTIN_NAMES.has(leaf)) continue;
+
+        // 直前のセグメントがPascalCase(先頭大文字)ならクラス名とみなし、検索クエリに残す。
+        // "from_pretrained" や "train" のような汎用的なメソッド名は、
+        // クラス名を落とすと同名の別クラスと混同され検索精度が落ちるため。
+        // ローカル変数(小文字始まり)が前置されている場合はメソッド名単体の方が検索しやすい。
+        const prevSegment = parts.length >= 2 ? parts[parts.length - 2] : null;
+        const isClassQualified = prevSegment && /^[A-Z]/.test(prevSegment);
+        const displayName = isClassQualified ? `${prevSegment}.${leaf}` : leaf;
+
+        if (seen.has(displayName)) continue;
+        seen.add(displayName);
+        items.push({ label: `Python ${displayName} 使い方`, query: `Python ${displayName} 使い方` });
       }
 
       const missTags = state.lastEvalForChunk?.miss_categories
@@ -881,12 +931,114 @@
       return items;
     }
 
+    // ChatGPT/Claude用プロンプトで選べる「知りたい観点」の候補。
+    // 特定のコード内容に依存しない汎用的な視点のみを載せる。
+    const PROMPT_VIEWPOINTS = [
+      "なぜこの処理が必要なのか",
+      "他にどんな書き方ができるか",
+      "つまずきやすいポイントはどこか",
+      "具体的なデータの例を使って流れを追ってほしい",
+      "初心者にも伝わる一言で要約してほしい"
+    ];
+
     function buildLLMPrompt() {
       if (!state.sessionData) return "";
       const chunk = state.sessionData.chunks[state.currentChunkIdx];
       const question = state.currentQuestion?.question || "";
       const questionPart = question ? `\n\n【出題された質問】\n${question}` : "";
-      return `以下のPythonコードについて学習しています。出題された質問に対して、答えを直接言わずに、私が自力で理解するための考え方のヒントと関連する文法・ライブラリの解説だけを教えてください。\n\n【対象コード】\n${chunk.code_segment}${questionPart}`;
+      const angles = Array.from(state.selectedPromptAngles || []);
+      const anglesPart = angles.length > 0
+        ? `\n\n【特に知りたい観点】\n${angles.map(a => `- ${a}`).join('\n')}`
+        : "";
+      return `私は以下のPythonコードの内容を、自分の言葉で人に説明できるようになりたいです。答えを直接教えるのではなく、私が自力で理解して説明できるようになるための考え方のヒントと、関連する文法・ライブラリの解説を教えてください。\n\n【対象コード】\n${chunk.code_segment}${questionPart}${anglesPart}`;
+    }
+
+    // 「着眼点ガイド」システムバブル（ピンポイント検索ワード ＆ ChatGPT/Claude用プロンプト）をスレッドに追記する。
+    // 対象Chunkの初回表示時(過去セッションでの不合格履歴に基づく再挑戦)と、
+    // 同一セッション内で「学び直す」ボタンを押した直後(直前の回答結果に基づく再挑戦)の
+    // 両方から呼び出される共通処理。
+    function appendRetryHintBubble(chunk) {
+      const pastSummary = state.projectAnalytics?.chunk_summary?.[chunk.name];
+      const missTags = state.lastEvalForChunk?.miss_categories
+        || pastSummary?.last_miss_categories
+        || [];
+      const feedback = state.lastEvalForChunk?.feedback
+        || pastSummary?.last_feedback
+        || '前回このChunkは要復習でした。コードをもう一度読み直してみましょう。';
+      const searchItems = buildIndividualSearchItems();
+
+      const chipsHtml = searchItems.length > 0
+        ? searchItems.map((item, ci) => `
+            <div class="flex justify-between items-center p-1.5 rounded bg-brand-bg border border-brand-border hover:border-indigo-400/50 transition-colors">
+              <span class="font-medium text-zinc-200">${escapeHtml(item.label)}</span>
+              <div class="flex gap-1">
+                <button data-copy-chip="${ci}" class="px-2 py-0.5 rounded bg-indigo-500/25 text-indigo-200 hover:bg-indigo-500/40 transition-colors text-[10px]">📋 コピー</button>
+                <a href="https://www.google.com/search?q=${encodeURIComponent(item.query)}" target="_blank" class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-[10px]">🌐 検索</a>
+              </div>
+            </div>
+          `).join('')
+        : `<span class="text-brand-muted">推奨キーワードがありません。</span>`;
+
+      const hintNode = appendMessage(`
+        <div class="msg msg-system">
+          <div class="msg-avatar">💡</div>
+          <div class="msg-bubble msg-bubble-system">
+            <div class="font-bold text-brand-amber mb-1.5 flex items-center gap-1.5 font-display">💡 再回答のための着眼点ガイド (丸パクリ防止)</div>
+            <p class="text-zinc-300 mb-2.5">${escapeHtml(feedback)}</p>
+            <div class="flex flex-wrap gap-1.5 mb-3">
+              ${missTags.map(tag => `<span class="px-2 py-0.5 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">${escapeHtml(tag)}</span>`).join('')}
+            </div>
+            <div class="pt-3 border-t border-brand-amber/20 flex flex-wrap gap-3">
+              <div class="popover-wrapper">
+                <button class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-indigo-200 border border-indigo-400/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
+                  🔍 ピンポイント検索ワードを選ぶ ▾
+                </button>
+                <div class="popover-content">
+                  <span class="text-indigo-300 font-bold block mb-2">🔍 調べたい単語をクリックしてコピー:</span>
+                  <div class="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">${chipsHtml}</div>
+                </div>
+              </div>
+              <div class="popover-wrapper">
+                <button data-copy-llm-prompt class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
+                  🤖 ChatGPT/Claude用プロンプトをコピー
+                </button>
+                <div class="popover-content">
+                  <span class="text-emerald-400 font-bold block mb-2">🎯 知りたい観点を選ぶ (任意・複数可):</span>
+                  <div class="flex flex-wrap gap-1 mb-2">
+                    ${PROMPT_VIEWPOINTS.map((v, vi) => `
+                      <button type="button" data-angle-idx="${vi}" class="prompt-angle-chip px-2 py-0.5 rounded border text-[10px] transition-colors ${state.selectedPromptAngles.has(v) ? 'bg-emerald-500/30 border-emerald-400 text-emerald-100' : 'bg-zinc-800 border-brand-border text-zinc-400 hover:border-emerald-400/50'}">${escapeHtml(v)}</button>
+                    `).join('')}
+                  </div>
+                  <span class="text-emerald-400 font-bold block mb-1">🤖 コピーされるLLM質問文:</span>
+                  <span class="text-zinc-300 block truncate max-w-[280px]" data-llm-prompt-preview>${escapeHtml(buildLLMPrompt())}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `);
+
+      hintNode.querySelectorAll('[data-angle-idx]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const v = PROMPT_VIEWPOINTS[parseInt(btn.getAttribute('data-angle-idx'), 10)];
+          if (state.selectedPromptAngles.has(v)) {
+            state.selectedPromptAngles.delete(v);
+            btn.className = 'prompt-angle-chip px-2 py-0.5 rounded border text-[10px] transition-colors bg-zinc-800 border-brand-border text-zinc-400 hover:border-emerald-400/50';
+          } else {
+            state.selectedPromptAngles.add(v);
+            btn.className = 'prompt-angle-chip px-2 py-0.5 rounded border text-[10px] transition-colors bg-emerald-500/30 border-emerald-400 text-emerald-100';
+          }
+          const preview = hintNode.querySelector('[data-llm-prompt-preview]');
+          if (preview) preview.textContent = buildLLMPrompt();
+        });
+      });
+
+      hintNode.querySelectorAll('[data-copy-chip]').forEach(btn => {
+        const item = searchItems[parseInt(btn.getAttribute('data-copy-chip'), 10)];
+        btn.addEventListener('click', () => copyText(item.query));
+      });
+      const llmPromptBtn = hintNode.querySelector('[data-copy-llm-prompt]');
+      if (llmPromptBtn) llmPromptBtn.addEventListener('click', () => copyText(buildLLMPrompt()));
     }
 
     function copyText(str) {
@@ -1029,6 +1181,7 @@
         typingNode.remove();
         if (json.status === 'success') {
           state.currentQuestion = json.data;
+          state.selectedPromptAngles = new Set();
           renderQuestionView();
         } else {
           showToast('質問の生成に失敗しました');
@@ -1105,67 +1258,7 @@
 
       // 再挑戦時: 着眼点ガイド ＆ ピンポイント検索チップをシステムバブルとして追記
       if (isRetryForChunk) {
-        const pastSummary = state.projectAnalytics?.chunk_summary?.[chunk.name];
-        const missTags = state.lastEvalForChunk?.miss_categories
-          || pastSummary?.last_miss_categories
-          || [];
-        const feedback = state.lastEvalForChunk?.feedback
-          || pastSummary?.last_feedback
-          || '前回このChunkは要復習でした。コードをもう一度読み直してみましょう。';
-        const searchItems = buildIndividualSearchItems();
-        const llmPrompt = buildLLMPrompt();
-
-        const chipsHtml = searchItems.length > 0
-          ? searchItems.map((item, ci) => `
-              <div class="flex justify-between items-center p-1.5 rounded bg-brand-bg border border-brand-border hover:border-indigo-400/50 transition-colors">
-                <span class="font-medium text-zinc-200">${escapeHtml(item.label)}</span>
-                <div class="flex gap-1">
-                  <button data-copy-chip="${ci}" class="px-2 py-0.5 rounded bg-indigo-500/25 text-indigo-200 hover:bg-indigo-500/40 transition-colors text-[10px]">📋 コピー</button>
-                  <a href="https://www.google.com/search?q=${encodeURIComponent(item.query)}" target="_blank" class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-[10px]">🌐 検索</a>
-                </div>
-              </div>
-            `).join('')
-          : `<span class="text-brand-muted">推奨キーワードがありません。</span>`;
-
-        const hintNode = appendMessage(`
-          <div class="msg msg-system">
-            <div class="msg-avatar">💡</div>
-            <div class="msg-bubble msg-bubble-system">
-              <div class="font-bold text-brand-amber mb-1.5 flex items-center gap-1.5 font-display">💡 再回答のための着眼点ガイド (丸パクリ防止)</div>
-              <p class="text-zinc-300 mb-2.5">${escapeHtml(feedback)}</p>
-              <div class="flex flex-wrap gap-1.5 mb-3">
-                ${missTags.map(tag => `<span class="px-2 py-0.5 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">${escapeHtml(tag)}</span>`).join('')}
-              </div>
-              <div class="pt-3 border-t border-brand-amber/20 flex flex-wrap gap-3">
-                <div class="popover-wrapper">
-                  <button class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-indigo-200 border border-indigo-400/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
-                    🔍 ピンポイント検索ワードを選ぶ ▾
-                  </button>
-                  <div class="popover-content">
-                    <span class="text-indigo-300 font-bold block mb-2">🔍 調べたい単語をクリックしてコピー:</span>
-                    <div class="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">${chipsHtml}</div>
-                  </div>
-                </div>
-                <div class="popover-wrapper">
-                  <button data-copy-llm-prompt class="px-3 py-1.5 rounded bg-brand-panel hover:bg-zinc-700 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
-                    🤖 ChatGPT/Claude用プロンプトをコピー
-                  </button>
-                  <div class="popover-content">
-                    <span class="text-emerald-400 font-bold block mb-1">🤖 コピーされるLLM質問文:</span>
-                    <span class="text-zinc-300 block truncate max-w-[280px]">${escapeHtml(llmPrompt)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `);
-
-        hintNode.querySelectorAll('[data-copy-chip]').forEach(btn => {
-          const item = searchItems[parseInt(btn.getAttribute('data-copy-chip'), 10)];
-          btn.addEventListener('click', () => copyText(item.query));
-        });
-        const llmPromptBtn = hintNode.querySelector('[data-copy-llm-prompt]');
-        if (llmPromptBtn) llmPromptBtn.addEventListener('click', () => copyText(llmPrompt));
+        appendRetryHintBubble(chunk);
       }
 
       document.getElementById('answer-input').value = "";
@@ -1317,6 +1410,11 @@
               <div class="msg-bubble msg-bubble-system text-zinc-300">同じ質問にもう一度挑戦してみましょう。上のヒントを参考にしてください。</div>
             </div>
           `);
+          // その場の再挑戦(同一セッション内)では loadQuestion() を呼ばないため、
+          // ここで直前の回答結果に基づく着眼点ガイドを明示的に追記する
+          // (これが無いと「上のヒントを参考に」と言われても参照先が存在しない状態になる)。
+          const currentChunk = state.sessionData.chunks[state.currentChunkIdx];
+          appendRetryHintBubble(currentChunk);
           setComposeVisible(true);
           setComposeEnabled(true);
           document.getElementById('answer-input').focus();
