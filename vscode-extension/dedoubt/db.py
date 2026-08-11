@@ -20,6 +20,41 @@ def get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     return conn
 
+def normalize_file_path(file_path: str) -> str:
+    """Windowsのドライブレター等の大文字小文字差異で同じファイルが別プロジェクト扱いにならないよう正規化する"""
+    return os.path.normcase(os.path.normpath(file_path))
+
+def _merge_duplicate_projects(cursor: sqlite3.Cursor) -> None:
+    """正規化後のパスが衝突する既存プロジェクトを1つに統合する（file_path列の正規化前に生まれた分裂の後方互換マイグレーション）"""
+    cursor.execute("SELECT * FROM projects")
+    rows = [dict(r) for r in cursor.fetchall()]
+
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        key = normalize_file_path(r["file_path"])
+        groups.setdefault(key, []).append(r)
+
+    for normalized_path, group in groups.items():
+        if len(group) <= 1:
+            if group[0]["file_path"] != normalized_path:
+                cursor.execute("UPDATE projects SET file_path = ? WHERE id = ?", (normalized_path, group[0]["id"]))
+            continue
+
+        # 最も新しく更新されたレコードを正として残す
+        group.sort(key=lambda r: r["updated_at"] or "", reverse=True)
+        primary = group[0]
+        duplicates = group[1:]
+        for dup in duplicates:
+            cursor.execute("UPDATE sessions SET project_id = ? WHERE project_id = ?", (primary["id"], dup["id"]))
+            cursor.execute("UPDATE exploration_ideas SET project_id = ? WHERE project_id = ?", (primary["id"], dup["id"]))
+            cursor.execute("DELETE FROM projects WHERE id = ?", (dup["id"],))
+
+        merged_total_chunks = max([g["total_chunks"] or 0 for g in group])
+        cursor.execute(
+            "UPDATE projects SET file_path = ?, total_chunks = ? WHERE id = ?",
+            (normalized_path, merged_total_chunks, primary["id"])
+        )
+
 def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
     """テーブルの初期化と作成"""
     with get_connection(db_path) as conn:
@@ -32,10 +67,16 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
             file_path TEXT NOT NULL UNIQUE,
             file_hash TEXT,
             overall_score REAL DEFAULT 0.0,
+            total_chunks INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        # 既存DBへの後方互換マイグレーション（列が既にある場合はエラーを無視）
+        try:
+            cursor.execute("ALTER TABLE projects ADD COLUMN total_chunks INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
 
         # sessions テーブル
         cursor.execute("""
@@ -70,6 +111,22 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
             FOREIGN KEY (session_id) REFERENCES sessions (id)
         );
         """)
+
+        # exploration_ideas テーブル（自由課題の提案履歴）
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS exploration_ideas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            source_chunk_refs TEXT, -- JSON配列
+            ideas TEXT NOT NULL, -- JSON配列
+            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES projects (id)
+        );
+        """)
+
+        # 既存DBへの後方互換マイグレーション: file_pathの大文字小文字差異で分裂したプロジェクトを統合
+        _merge_duplicate_projects(cursor)
+
         conn.commit()
 
 def get_recent_projects(limit: int = 10, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
@@ -92,27 +149,41 @@ def get_recent_projects(limit: int = 10, db_path: str = DEFAULT_DB_PATH) -> List
         )
         return [dict(r) for r in cursor.fetchall()]
 
-def get_or_create_project(file_path: str, file_hash: Optional[str] = None, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
+def get_or_create_project(
+    file_path: str,
+    file_hash: Optional[str] = None,
+    total_chunks: Optional[int] = None,
+    db_path: str = DEFAULT_DB_PATH,
+) -> Dict[str, Any]:
     init_db(db_path)
+    file_path = normalize_file_path(file_path)
     now = datetime.now().isoformat()
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM projects WHERE file_path = ?", (file_path,))
         row = cursor.fetchone()
         if row:
+            updates = []
+            params: List[Any] = []
             if file_hash and row["file_hash"] != file_hash:
-                cursor.execute(
-                    "UPDATE projects SET file_hash = ?, updated_at = ? WHERE id = ?",
-                    (file_hash, now, row["id"])
-                )
+                updates.append("file_hash = ?")
+                params.append(file_hash)
+            if total_chunks is not None and row["total_chunks"] != total_chunks:
+                updates.append("total_chunks = ?")
+                params.append(total_chunks)
+            if updates:
+                updates.append("updated_at = ?")
+                params.append(now)
+                params.append(row["id"])
+                cursor.execute(f"UPDATE projects SET {', '.join(updates)} WHERE id = ?", params)
                 conn.commit()
                 cursor.execute("SELECT * FROM projects WHERE id = ?", (row["id"],))
                 row = cursor.fetchone()
             return dict(row)
-        
+
         cursor.execute(
-            "INSERT INTO projects (file_path, file_hash, overall_score, created_at, updated_at) VALUES (?, ?, 0.0, ?, ?)",
-            (file_path, file_hash, now, now)
+            "INSERT INTO projects (file_path, file_hash, overall_score, total_chunks, created_at, updated_at) VALUES (?, ?, 0.0, ?, ?, ?)",
+            (file_path, file_hash, total_chunks or 0, now, now)
         )
         conn.commit()
         project_id = cursor.lastrowid
@@ -202,10 +273,47 @@ def get_chunk_history_summary(chunk_ref: str, db_path: str = DEFAULT_DB_PATH) ->
         )
         return [dict(r) for r in cursor.fetchall()]
 
+def save_exploration_ideas(
+    project_id: int,
+    source_chunk_refs: List[str],
+    ideas: List[Dict[str, Any]],
+    db_path: str = DEFAULT_DB_PATH,
+) -> int:
+    """LLMが生成した自由課題（展望）の提案をプロジェクトに紐づけて保存"""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute(
+            "INSERT INTO exploration_ideas (project_id, source_chunk_refs, ideas, generated_at) VALUES (?, ?, ?, ?)",
+            (project_id, json.dumps(source_chunk_refs, ensure_ascii=False), json.dumps(ideas, ensure_ascii=False), now)
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+def get_exploration_ideas_history(project_id: int, db_path: str = DEFAULT_DB_PATH) -> List[Dict[str, Any]]:
+    """プロジェクトの自由課題提案履歴を新しい順に取得"""
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM exploration_ideas WHERE project_id = ? ORDER BY id DESC",
+            (project_id,)
+        )
+        result = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            d["source_chunk_refs"] = json.loads(d["source_chunk_refs"]) if d["source_chunk_refs"] else []
+            d["ideas"] = json.loads(d["ideas"]) if d["ideas"] else []
+            result.append(d)
+        return result
+
 def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Dict[str, Any]:
     """過去の全セッションを横断分析し、Chunk別の習熟度と全体苦手カテゴリを取得"""
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT total_chunks FROM projects WHERE id = ?", (project_id,))
+        project_row = cursor.fetchone()
+        total_chunks = (project_row["total_chunks"] or 0) if project_row else 0
+
         # プロジェクト配下の全 QA 履歴を取得
         cursor.execute(
             """
@@ -233,6 +341,7 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
                     "max_score": score,
                     "attempts": 1,
                     "last_passed": passed,
+                    "ever_passed": passed,
                     "last_feedback": r["feedback"],
                     "last_miss_categories": misses
                 }
@@ -241,6 +350,7 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
                 chunk_summary[chunk]["max_score"] = max(chunk_summary[chunk]["max_score"], score)
                 chunk_summary[chunk]["attempts"] += 1
                 chunk_summary[chunk]["last_passed"] = passed
+                chunk_summary[chunk]["ever_passed"] = chunk_summary[chunk]["ever_passed"] or passed
                 chunk_summary[chunk]["last_feedback"] = r["feedback"]
                 chunk_summary[chunk]["last_miss_categories"] = misses
 
@@ -250,8 +360,15 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
         # 苦手順（出現回数順）にソート
         top_weaknesses = sorted(all_miss_categories.items(), key=lambda x: x[1], reverse=True)
 
+        # 「自由課題」の解禁は直近の合否ではなく、過去に一度でも合格したことがあるかで判定する
+        # (テスト中の適当な1回の回答で「未達成」に巻き戻ってしまうのを防ぐため)
+        ever_passed_count = sum(1 for c in chunk_summary.values() if c["ever_passed"])
+        is_fully_mastered = bool(total_chunks > 0 and ever_passed_count >= total_chunks)
+
         return {
             "project_id": project_id,
             "chunk_summary": chunk_summary,
-            "top_weaknesses": [{"category": k, "count": v} for k, v in top_weaknesses]
+            "top_weaknesses": [{"category": k, "count": v} for k, v in top_weaknesses],
+            "total_chunks": total_chunks,
+            "is_fully_mastered": is_fully_mastered
         }

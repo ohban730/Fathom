@@ -346,6 +346,34 @@ class MockLLMClient(LLMClient):
                 "is_passed": False
             }, ensure_ascii=False)
 
+        # ──────────────────────────────────────────
+        # 【タスク: 自由課題提案】
+        # ──────────────────────────────────────────
+        elif "【タスク: 自由課題提案】" in prompt:
+            # 特定のファイル/関数名をハードコードせず、プロンプト内のChunk見出しから汎用的に抽出する
+            chunk_names = re.findall(r"■ (\S+) \(", prompt)
+            primary = chunk_names[0] if chunk_names else "このコード"
+            secondary = chunk_names[1] if len(chunk_names) > 1 else primary
+            return json.dumps({
+                "ideas": [
+                    {
+                        "title": f"{primary} を別アルゴリズムで再実装してみる",
+                        "description": f"{primary} の入出力仕様はそのままに、内部ロジックだけを別のアプローチに置き換えてみましょう。",
+                        "hook": "同じ仕様でも実装は一通りではないことを体感できます。"
+                    },
+                    {
+                        "title": f"{secondary} を中心に処理を可視化するツールを作る",
+                        "description": f"{secondary} の呼び出しごとの状態変化をログやグラフとして出力する小さなラッパーを書いてみましょう。",
+                        "hook": "コードを「読む」から「観察する」に変えると、新しい疑問が生まれます。"
+                    },
+                    {
+                        "title": "このファイル全体をテスト可能な形に分割する",
+                        "description": "各Chunkに対応するユニットテストを書き、境界値やエラー系の入力をわざと試してみましょう。",
+                        "hook": "自分でテストケースを考えることで、仕様の理解がより具体的になります。"
+                    }
+                ]
+            }, ensure_ascii=False)
+
         return "{}"
 
 # ──────────────────────────────────────────
@@ -448,6 +476,46 @@ def build_evaluation_prompt(chunk: CodeChunk, question: str, user_answer: str, t
   "miss_categories": ["特定の検証条件の見落とし"],
   "feedback": "関数の目的の一部は理解できています！\\n💡 戻り値の仕様と例外条件について言及を追加して再チャレンジしてみましょう。",
   "is_passed": false
+}}
+```
+"""
+
+def build_exploration_prompt(chunks: List[CodeChunk], top_weaknesses: Optional[List[Dict[str, Any]]] = None) -> str:
+    """全Chunk合格後に提示する、自由課題（Bloom創造レベルの発展的アイデア）提案用プロンプトを構築"""
+    chunk_overview = "\n\n".join([
+        f"■ {c.name} ({c.chunk_type})\n呼び出し先: {', '.join(c.calls) if c.calls else 'なし'}\n```python\n{c.code_segment}\n```"
+        for c in chunks
+    ])
+
+    weakness_note = ""
+    if top_weaknesses:
+        tags = ", ".join([w.get("category", "") for w in top_weaknesses[:5] if w.get("category")])
+        if tags:
+            weakness_note = f"\n【学習者がこれまで苦手としてきた観点】\n{tags}\n（得意な部分を土台にしつつ、これらの観点を自然に使う課題があれば歓迎します）\n"
+
+    return f"""あなたはソフトウェア開発の学習コーチです。
+【タスク: 自由課題提案】
+
+学習者はこのコードの全Chunkについて、構造・仕様の理解度チェックに合格しました。
+このコードを土台に、学習者が「次に自分で手を動かしてみたくなる」ような、このコード固有の自由課題（発展的な作り込みのアイデア）を3件提案してください。
+これはBloomの分類学でいう最上位「⑥創造」レベルの課題であり、正誤を採点するものではありません。正解を教えるのではなく、好奇心を刺激する提案にしてください。
+
+【対象コードの全体構造】
+{chunk_overview}
+{weakness_note}
+【提案の条件】
+- 提案は必ずこのコードの実際の関数名・処理内容に言及し、一般論（例:「エラーハンドリングを学びましょう」）で終わらせないこと
+- 既存コードを壊す指示ではなく、拡張・別実装・応用の方向性を示すこと
+- 各提案は「タイトル」「何をするか(2〜3文)」「なぜ面白いか・何が身につくか(1文)」で構成すること
+
+【要求出力フォーマット (必ず以下のJSONのみを出力してください)】
+```json
+{{
+  "ideas": [
+    {{"title": "提案タイトル", "description": "具体的に何を作る/変更するか", "hook": "なぜ面白いか・何が身につくか"}},
+    {{"title": "...", "description": "...", "hook": "..."}},
+    {{"title": "...", "description": "...", "hook": "..."}}
+  ]
 }}
 ```
 """

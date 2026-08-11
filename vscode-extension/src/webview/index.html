@@ -398,6 +398,22 @@
       </div>
     </div>
 
+    <!-- 🌌 自由課題（発展的アイデア） -->
+    <div class="bg-brand-bg border border-brand-border rounded-lg p-5 mb-8 text-left">
+      <h3 class="text-xs font-bold text-purple-300 uppercase tracking-wider mb-3 flex items-center gap-1.5 font-display">
+        🌌 自由課題（次に挑戦できること）
+      </h3>
+      <div id="exploration-idle">
+        <p class="text-xs text-brand-muted mb-3">このコードを土台に、発展的な自由課題をLLMに提案してもらえます（採点対象外・好奇心のためのアイデア出しです）。</p>
+        <button id="btn-generate-exploration" class="py-2 px-4 bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 border border-purple-400/30 font-semibold text-xs rounded-lg transition-colors">
+          🌌 自由課題を見る
+        </button>
+      </div>
+      <div id="exploration-loading" class="hidden text-xs text-brand-muted italic">✨ 発想を広げています...</div>
+      <div id="exploration-error" class="hidden text-xs text-brand-red"></div>
+      <div id="exploration-list" class="hidden space-y-3 text-xs"></div>
+    </div>
+
     <div class="text-center">
       <button id="btn-restart" class="py-2.5 px-8 bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-sm rounded-lg transition-colors shadow-sm">
         🔄 再度理解テストを開始（弱点克服）
@@ -1130,6 +1146,14 @@
           state.currentChunkIdx = 0;
           state.chunkResults = {};
           await fetchProjectAnalytics(json.data.project.id);
+
+          // 過去のセッションで全Chunk合格済みなら、同じ質問をもう一度解かせず完了画面へ直行する
+          if (state.projectAnalytics && state.projectAnalytics.is_fully_mastered) {
+            loadFinishAnalytics();
+            showView('view-finish');
+            return;
+          }
+
           renderConstellation();
           loadQuestion();
         } else {
@@ -1472,6 +1496,55 @@
     document.getElementById('btn-restart').addEventListener('click', () => {
       startSession();
     });
+
+    document.getElementById('btn-generate-exploration').addEventListener('click', generateExploration);
+
+    async function generateExploration() {
+      document.getElementById('exploration-idle').classList.add('hidden');
+      document.getElementById('exploration-error').classList.add('hidden');
+      document.getElementById('exploration-list').classList.add('hidden');
+      document.getElementById('exploration-loading').classList.remove('hidden');
+
+      try {
+        const res = await fetch(`${API_BASE}/api/exploration/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({ file_path: state.filePath })
+        });
+        const json = await res.json();
+        document.getElementById('exploration-loading').classList.add('hidden');
+
+        if (json.status === 'success' && json.data && json.data.ideas) {
+          renderExplorationIdeas(json.data.ideas);
+        } else {
+          showExplorationError(json.detail || '自由課題の生成に失敗しました。');
+        }
+      } catch(e) {
+        console.error(e);
+        document.getElementById('exploration-loading').classList.add('hidden');
+        showExplorationError('バックエンドに接続できませんでした。');
+      }
+    }
+
+    function showExplorationError(message) {
+      const errorEl = document.getElementById('exploration-error');
+      errorEl.textContent = `⚠️ ${message}`;
+      errorEl.classList.remove('hidden');
+      document.getElementById('exploration-idle').classList.remove('hidden');
+    }
+
+    function renderExplorationIdeas(ideas) {
+      const listEl = document.getElementById('exploration-list');
+      listEl.innerHTML = ideas.map(idea => `
+        <div class="p-3 rounded-lg bg-brand-card border border-purple-400/20">
+          <div class="font-bold text-purple-200 mb-1">💡 ${escapeHtml(idea.title || '')}</div>
+          <p class="text-zinc-300 leading-relaxed mb-1">${escapeHtml(idea.description || '')}</p>
+          ${idea.hook ? `<p class="text-brand-muted italic">✨ ${escapeHtml(idea.hook)}</p>` : ''}
+        </div>
+      `).join('');
+      listEl.classList.remove('hidden');
+    }
 
     function showView(viewId) {
       ['view-init', 'view-workspace', 'view-finish'].forEach(id => {

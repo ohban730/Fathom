@@ -17,9 +17,16 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from dedoubt.core import DeDoubtCore
-from dedoubt.parser import CodeChunk
+from dedoubt.parser import CodeChunk, parse_code_chunks, calculate_file_hash
 from dedoubt.llm import OllamaClient, MockLLMClient, is_unknown_or_empty_answer, list_ollama_models
-from dedoubt.db import get_qa_histories_for_session, get_chunk_history_summary, get_recent_projects
+from dedoubt.db import (
+    get_qa_histories_for_session,
+    get_chunk_history_summary,
+    get_recent_projects,
+    get_or_create_project,
+    get_project_analytics,
+    get_exploration_ideas_history,
+)
 
 app = FastAPI(
     title="DeDoubt Local Backend API",
@@ -60,6 +67,9 @@ class AnswerEvaluateRequest(BaseModel):
 
 class OllamaModelSetRequest(BaseModel):
     model: str
+
+class ExplorationGenerateRequest(BaseModel):
+    file_path: str
 
 # ──────────────────────────────────────────
 # API エンドポイント
@@ -189,7 +199,6 @@ def recent_projects(limit: int = 10):
 def get_project_analytics_data(project_id: int):
     """過去の全セッションを横断分析し、Chunk別の習熟度と全体苦手カテゴリを取得"""
     try:
-        from dedoubt.db import get_project_analytics
         analytics = get_project_analytics(project_id, db_path=DB_PATH)
         return {
             "status": "success",
@@ -197,6 +206,44 @@ def get_project_analytics_data(project_id: int):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"アナリティクス取得エラー: {str(e)}")
+
+@app.post("/api/exploration/generate")
+def generate_exploration(req: ExplorationGenerateRequest):
+    """全Chunk合格済みのファイルに対し、コード固有の自由課題（発展的アイデア）を生成して保存"""
+    if not os.path.exists(req.file_path):
+        raise HTTPException(status_code=404, detail=f"ファイルが存在しません: {req.file_path}")
+
+    try:
+        file_hash = calculate_file_hash(req.file_path)
+        chunks = parse_code_chunks(req.file_path)
+        project = get_or_create_project(req.file_path, file_hash, total_chunks=len(chunks), db_path=DB_PATH)
+        analytics = get_project_analytics(project["id"], db_path=DB_PATH)
+
+        result = core.generate_exploration_ideas(
+            project_id=project["id"],
+            chunks=chunks,
+            top_weaknesses=analytics.get("top_weaknesses", [])
+        )
+        return {
+            "status": "success",
+            "data": result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"自由課題生成エラー: {str(e)}")
+
+@app.get("/api/exploration/{project_id}")
+def get_exploration_history(project_id: int):
+    """プロジェクトの自由課題提案履歴を新しい順に取得"""
+    try:
+        data = get_exploration_ideas_history(project_id, db_path=DB_PATH)
+        return {
+            "status": "success",
+            "data": data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"自由課題履歴取得エラー: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
