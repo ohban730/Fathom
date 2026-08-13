@@ -1,5 +1,7 @@
 # CodeLitmus
 
+> **⚠️ Language: Japanese only.** The panel UI, the generated questions, and the grading feedback are all in Japanese. Command names and settings are localized, but everything inside the tool is not. English support is not implemented yet — please treat this as a Japanese-language tool for now.
+
 バイブコーディングによって発生する「理解負債」を、能動学習(質問→回答→採点→フィードバック)によって解消するVS Code拡張機能です。
 
 リトマス試験紙のように、「このコードを自分は本当に理解できているか」を判定します。
@@ -45,6 +47,13 @@ CodeLitmusはネットワーク的にローカル完結です。コードや回�
 - 学習履歴はローカルのSQLite(`codelitmus.db`)にのみ保存されます
 
 唯一の例外は、苦手タグの「🌐 検索」リンクです。これはクリックしたときだけ既定のブラウザでGoogle検索を開きます。
+
+## 対応言語
+
+現状、日本語のみです。
+
+- コマンド名・設定項目の説明は`package.nls.json`で多言語化済み（既定は英語、日本語環境では日本語）
+- ただし**パネル内のUI・生成される質問・採点フィードバックはすべて日本語**です。LLMへのプロンプト自体が日本語で書かれているため、出力も日本語で返ります
 
 ## ライセンス
 

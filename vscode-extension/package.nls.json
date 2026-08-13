@@ -1,0 +1,7 @@
+{
+  "displayName": "CodeLitmus — Code Comprehension Check",
+  "description": "Turns the comprehension debt left by vibe coding into active learning: generates questions about your own code, grades your answers, and tracks what you actually understand. UI and generated questions are Japanese only for now.",
+  "command.startSession.title": "CodeLitmus: Start comprehension check (current file)",
+  "command.showRecentFiles.title": "CodeLitmus: Open a recently checked file",
+  "configuration.pythonPath.description": "Absolute path to the Python executable used to launch the CodeLitmus backend (main.py) — e.g. the python.exe of a conda env. The backend cannot start while this is unset."
+}

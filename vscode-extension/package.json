@@ -1,7 +1,7 @@
 {
   "name": "codelitmus-vscode",
-  "displayName": "CodeLitmus — コード理解サポート",
-  "description": "バイブコーディングの理解負債を解消し、IDE内で直感的にコード理解度を学習・検証するVS Code拡張機能",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "2.0.0",
   "publisher": "codelitmus",
   "license": "MIT",
@@ -29,12 +29,12 @@
     "commands": [
       {
         "command": "codelitmus.startSession",
-        "title": "CodeLitmus: 理解度テストを開始 (現在のファイル)",
+        "title": "%command.startSession.title%",
         "icon": "$(brain)"
       },
       {
         "command": "codelitmus.showRecentFiles",
-        "title": "CodeLitmus: 最近テストしたファイルを開く",
+        "title": "%command.showRecentFiles.title%",
         "icon": "$(history)"
       }
     ],
@@ -70,7 +70,7 @@
         "codelitmus.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "CodeLitmusバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのcodelitmus環境のpython.exe)。未設定の場合はバックエンドを起動できません。"
+          "description": "%configuration.pythonPath.description%"
         }
       }
     }

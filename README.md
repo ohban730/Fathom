@@ -80,6 +80,12 @@ CodeLitmusはファイルの絶対パスだけで動くため、今開いてい�
 - バックエンドはローカルのPython実行体が前提です。Pythonランタイム自体を同梱した配布は行っていません(自分専用+セットアップ手順公開という方針のため)。
 - Ollama未セットアップ時はMockエンジンにフォールバックし、コード内容に応じた厳格な採点にはなりません。
 
+## 対応言語 / Language
+
+**日本語のみです。UI and generated questions are currently Japanese only.**
+
+コマンド名と設定項目の説明のみ`vscode-extension/package.nls.json`（既定=英語）/ `package.nls.ja.json`（日本語）で多言語化しています。パネル内のUI・生成される質問・採点フィードバックは日本語固定です。[`codelitmus/llm.py`](vscode-extension/codelitmus/llm.py)のプロンプト自体が日本語で書かれているため、LLMの出力も日本語で返ります。
+
 ## ライセンス
 
 CodeLitmus本体は [MIT License](LICENSE) です。
