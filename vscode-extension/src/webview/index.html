@@ -240,6 +240,26 @@
   </div>
 
   <!-- ──────────────────────────────────────────
+      ビュー0: 対象ファイル未選択（起動直後の既定状態）
+  ────────────────────────────────────────── -->
+  <!-- 下部Panel領域は縦が狭いので、余白は view-finish と同じ py-10 に揃えておく -->
+  <div id="view-idle" class="flex-1 flex flex-col items-center justify-center py-10 px-8 bg-brand-card rounded-xl border border-brand-border hidden">
+    <div class="text-3xl mb-4">✨</div>
+    <h2 class="text-base font-semibold font-display text-brand-text">対象ファイルが選ばれていません</h2>
+    <p class="text-xs text-brand-muted mt-2 mb-6 text-center">理解度をテストしたいPythonファイルを開くと、ここに星図が表示されます</p>
+
+    <button id="btn-idle-select-file" class="px-4 py-2 rounded-lg bg-indigo-500/20 border border-indigo-400/40 text-indigo-200 text-xs font-medium hover:bg-indigo-500/30 hover:border-indigo-400 transition-colors mb-6">
+      📄 ファイルを選んで開始
+    </button>
+
+    <ul class="list-disc pl-5 space-y-1.5 text-[11px] text-brand-muted max-w-[420px]">
+      <li>エディタでPythonファイルを開くと自動で追従します</li>
+      <li><code>Ctrl+Alt+D</code>（Macは<code>Cmd+Alt+D</code>）でも開始できます</li>
+      <li>ヘッダーの<b>🕒</b>から、過去にテストしたファイルを開けます</li>
+    </ul>
+  </div>
+
+  <!-- ──────────────────────────────────────────
       ビュー2 & ビュー4: 左右2カラム スプリットレイアウト
   ────────────────────────────────────────── -->
   <div id="view-workspace" class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 hidden">
@@ -467,7 +487,11 @@
     const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 
     let state = {
-      filePath: "C:\\Users\\owner\\Documents\\lab\\DeDoughtスプレッドシート\\検証用ファイル\\assert-and-raise.py",
+      // 対象ファイルは拡張ホストからの initSession / switchFile でのみ決まる。
+      // 空文字は「まだ何も選ばれていない」ことを表す明示的な状態で、この間は
+      // view-idle(操作手順の案内)を出す。特定のサンプルファイルを既定値に
+      // 置くと、そのパスが存在する環境でしか意味を持たない挙動になる。
+      filePath: "",
       targetScore: 70,
       difficulty: "標準",
       sessionData: null,
@@ -525,6 +549,15 @@
           showToast('VS Code拡張機能内でのみ利用できます');
         }
       });
+      document.getElementById('btn-idle-select-file').addEventListener('click', () => {
+        if (vscode) {
+          // 拡張ホスト側の codelitmus.startSession は、アクティブエディタが無ければ
+          // ファイル選択ダイアログを開く。案内ビューからの導線をそこに合流させる。
+          vscode.postMessage({ command: 'requestStartSession' });
+        } else {
+          showToast('VS Code拡張機能内でのみ利用できます');
+        }
+      });
 
       window.addEventListener('message', (event) => {
         const message = event.data;
@@ -555,9 +588,10 @@
         vscode.postMessage({ command: 'ready' });
       }
 
-      if (!vscode) {
-        startSession();
-      }
+      // 起動直後は対象ファイルが未選択なので案内ビューから始まる。
+      // 拡張ホストから initSession / switchFile が届いた時点でセッションが開始される。
+      // (単体プレビュー時もファイルパスを持たないため同じく案内ビューになる)
+      startSession();
     });
 
     // ── トースト通知 ──
@@ -1251,6 +1285,13 @@
     }
 
     async function startSession(forceQuiz = false) {
+      // 対象ファイル未選択のまま /api/session/start を叩くと存在しないパスで
+      // 404になるだけなので、その手前で案内ビューに切り替える
+      if (!state.filePath) {
+        showIdleView();
+        return;
+      }
+
       showView('view-init');
       document.getElementById('thread-messages').innerHTML = '';
       document.getElementById('file-path-badge').innerText = `📁 ${state.filePath.split('\\').pop() || state.filePath.split('/').pop()}`;
@@ -1287,6 +1328,16 @@
         console.error(e);
         showToast('バックエンドに接続できません (127.0.0.1:8000)');
       }
+    }
+
+    // 対象ファイル未選択の状態を表示する。ヘッダーのファイル名バッジも
+    // 「読み込み中」のままにせず、未選択であることを明示する。
+    function showIdleView() {
+      const badge = document.getElementById('file-path-badge');
+      badge.innerText = '📁 ファイル未選択';
+      badge.title = '';
+      document.getElementById('thread-messages').innerHTML = '';
+      showView('view-idle');
     }
 
     async function fetchProjectAnalytics(projectId) {
@@ -1673,7 +1724,7 @@
     }
 
     function showView(viewId) {
-      ['view-init', 'view-workspace', 'view-finish'].forEach(id => {
+      ['view-idle', 'view-init', 'view-workspace', 'view-finish'].forEach(id => {
         const el = document.getElementById(id);
         if (id === viewId) el.classList.remove('hidden');
         else el.classList.add('hidden');

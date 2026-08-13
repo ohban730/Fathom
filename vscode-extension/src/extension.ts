@@ -186,6 +186,10 @@ class CodeLitmusViewProvider implements vscode.WebviewViewProvider {
                 this.onProgressUpdate(message.fileName, message.current, message.total);
             } else if (message?.command === 'showRecentFiles') {
                 vscode.commands.executeCommand('codelitmus.showRecentFiles');
+            } else if (message?.command === 'requestStartSession') {
+                // ファイル未選択の案内ビューからの導線。アクティブエディタが無ければ
+                // コマンド側がファイル選択ダイアログを開く。
+                vscode.commands.executeCommand('codelitmus.startSession');
             } else if (message?.command === 'addFolderToWorkspace') {
                 vscode.commands.executeCommand('workbench.action.addRootFolder');
             }
