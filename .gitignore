@@ -7,6 +7,10 @@ venv/
 
 # SQLite DB (ローカルの学習データ・テストデータ)
 *.db
+*.db.bak-*
+
+# 拡張機能の配布パッケージ
+*.vsix
 
 # Node.js
 node_modules/

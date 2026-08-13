@@ -79,3 +79,11 @@ CodeLitmusはファイルの絶対パスだけで動くため、今開いてい�
 
 - バックエンドはローカルのPython実行体が前提です。Pythonランタイム自体を同梱した配布は行っていません(自分専用+セットアップ手順公開という方針のため)。
 - Ollama未セットアップ時はMockエンジンにフォールバックし、コード内容に応じた厳格な採点にはなりません。
+
+## ライセンス
+
+CodeLitmus本体は [MIT License](LICENSE) です。
+
+同梱している第三者ソフトウェア(Tailwind CSS / Mermaid / Space Grotesk)と、バックエンドが利用するPythonパッケージのライセンス表記は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にまとめています。GPL/LGPL/AGPL系のコンポーネントは含まれていません。
+
+Ollamaで使用するモデルのライセンスはモデルごとに異なります(Llama系はMeta独自ライセンス、Mistral系/Qwen系はApache-2.0が多い、GemmaはGoogle独自の利用規約など)。利用前にご自身でご確認ください。

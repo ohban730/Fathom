@@ -1,0 +1,34 @@
+# `vsce package` が .vsix に含めないものを列挙する。
+# 既定では vscode-extension/ 配下が丸ごと入るため、明示的に除外しないと
+# node_modules・ローカルの学習データDB・TypeScriptソースまで配布物に混入する。
+
+# --- 個人データ・ローカル状態(最優先で除外) ---
+# codelitmus.db には実際に解いた問題・回答・スコアが入っている。絶対に配布しない。
+**/*.db
+**/*.db.bak-*
+**/*.sqlite
+**/*.sqlite3
+
+# --- 開発時のみ必要なもの ---
+node_modules/**
+.vscode/**
+.vscode-test/**
+.gitignore
+tsconfig.json
+tailwind.config.js
+
+# TypeScriptソース(out/ にコンパイル済みが入る)。
+# ただし src/webview/index.html は実行時に extensionPath から読み込むので残す。
+src/**/*.ts
+src/**/*.map
+src/webview/tailwind.src.css
+
+# --- Python のキャッシュ・テスト成果物 ---
+**/__pycache__/**
+**/*.pyc
+**/*.pyo
+.pytest_cache/**
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
