@@ -22,12 +22,33 @@ from codelitmus.llm import (
     LLMClient,
     OllamaClient,
     MockLLMClient,
+    DEFAULT_LOCALE,
     build_question_prompt,
     build_evaluation_prompt,
     build_exploration_prompt,
+    canonicalize_miss_categories,
+    miss_category,
     parse_llm_json,
     is_unknown_or_empty_answer,
+    resolve_locale,
 )
+
+# 「わからない」と回答された場合など、LLMを介さずコード側で確定させる文言。
+# 出力言語(locale)の切り替え対象なのでここで持つ。
+NO_ANSWER_FEEDBACK = {
+    "ja": "💡 「わからない」と正直に回答していただきありがとうございます！\n関数のコードを見ながら、どのようなチェックが行われているかを言葉にしてみましょう。",
+    "en": "💡 Thanks for being honest that you're not sure!\nRead the function line by line and try putting into words what each check is doing.",
+}
+NO_ANSWER_REASON = {
+    "ja": "回答が「わからない」または未入力のため評価できません。",
+    "en": "Cannot be evaluated: the answer was blank or stated a lack of understanding.",
+}
+DEFAULT_RUBRIC_NAME = {"ja": "仕様理解", "en": "Understanding of the spec"}
+FALLBACK_RUBRIC_NAME = {"ja": "評価項目", "en": "Criterion"}
+FALLBACK_QUESTION = {
+    "ja": "コードの処理内容を説明してください。",
+    "en": "Explain what this code does.",
+}
 
 class CodeLitmusCore:
     def __init__(self, db_path: str = "codelitmus.db", llm_client: Optional[LLMClient] = None):
@@ -66,15 +87,17 @@ class CodeLitmusCore:
         chunk: CodeChunk,
         axis: str = "構造軸",
         difficulty: str = "標準",
-        mode: str = "しっかり"
+        mode: str = "しっかり",
+        locale: str = DEFAULT_LOCALE
     ) -> Dict[str, Any]:
         """指定した Chunk に対する質問と動的ルーブリックを生成"""
-        prompt = build_question_prompt(chunk, axis=axis, difficulty=difficulty, mode=mode)
+        loc = resolve_locale(locale)
+        prompt = build_question_prompt(chunk, axis=axis, difficulty=difficulty, mode=mode, locale=loc)
         response = self.llm.ask(prompt)
         parsed = parse_llm_json(response)
 
         return {
-            "question": parsed.get("question", "コードの処理内容を説明してください。"),
+            "question": parsed.get("question", FALLBACK_QUESTION[loc]),
             "axis": parsed.get("axis", axis),
             "difficulty": parsed.get("difficulty", difficulty),
             "rubric": parsed.get("rubric", []),
@@ -87,9 +110,11 @@ class CodeLitmusCore:
         chunk: CodeChunk,
         question_data: Dict[str, Any],
         user_answer: str,
-        target_score: int = 70
+        target_score: int = 70,
+        locale: str = DEFAULT_LOCALE
     ) -> Dict[str, Any]:
         """ユーザーの回答を動的観点に基づいて厳格採点し、DBに保存"""
+        loc = resolve_locale(locale)
         question_text = question_data["question"]
         rubric = question_data.get("rubric", [])
 
@@ -98,13 +123,13 @@ class CodeLitmusCore:
             score = 0
             is_passed = False
             score_details = [
-                {"name": r.get("name", "評価項目"), "score": 0, "max": r.get("max", 25), "reason": "回答が「わからない」または未入力のため評価できません。"}
-                for r in (rubric or [{"name": "仕様理解", "max": 100}])
+                {"name": r.get("name", FALLBACK_RUBRIC_NAME[loc]), "score": 0, "max": r.get("max", 25), "reason": NO_ANSWER_REASON[loc]}
+                for r in (rubric or [{"name": DEFAULT_RUBRIC_NAME[loc], "max": 100}])
             ]
-            miss_categories = ["内容未記述・理解不足"]
-            feedback = "💡 「わからない」と正直に回答していただきありがとうございます！\n関数のコードを見ながら、どのようなチェックが行われているかを言葉にしてみましょう。"
+            miss_categories = [miss_category("no_answer", loc)]
+            feedback = NO_ANSWER_FEEDBACK[loc]
         else:
-            prompt = build_evaluation_prompt(chunk, question_text, user_answer, target_score=target_score, rubric=rubric)
+            prompt = build_evaluation_prompt(chunk, question_text, user_answer, target_score=target_score, rubric=rubric, locale=loc)
             response = self.llm.ask(prompt)
             parsed = parse_llm_json(response)
 
@@ -117,7 +142,8 @@ class CodeLitmusCore:
                 score = int(parsed.get("score", 45))
 
             is_passed = bool(score >= target_score)
-            miss_categories = parsed.get("miss_categories", [])
+            # LLMは語彙外のIDや旧形式の文字列を返すことがあるため、必ず正規化してから保存する
+            miss_categories = canonicalize_miss_categories(parsed.get("miss_categories", []), loc)
             feedback = parsed.get("feedback", "")
 
         qa_id = save_qa_history(
@@ -154,9 +180,10 @@ class CodeLitmusCore:
         project_id: int,
         chunks: List[CodeChunk],
         top_weaknesses: Optional[List[Dict[str, Any]]] = None,
+        locale: str = DEFAULT_LOCALE,
     ) -> Dict[str, Any]:
         """全Chunk合格後、コード固有の自由課題（発展的アイデア）をLLMに生成させDBに保存する"""
-        prompt = build_exploration_prompt(chunks, top_weaknesses=top_weaknesses)
+        prompt = build_exploration_prompt(chunks, top_weaknesses=top_weaknesses, locale=resolve_locale(locale))
         response = self.llm.ask(prompt)
         parsed = parse_llm_json(response)
 

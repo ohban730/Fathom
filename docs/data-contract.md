@@ -127,6 +127,10 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
 ```
 `rubric`の`max`合計は常に100になる想定（[`codelitmus/llm.py`](../vscode-extension/codelitmus/llm.py) `build_question_prompt`のプロンプト制約）。
 
+### 出力言語（locale）
+
+`/api/question/generate`・`/api/answer/evaluate`・`/api/exploration/generate` は `locale`（`"ja"` / `"en"`、既定 `"ja"`）を受け取る。これはLLMが生成する**文章の言語**だけを切り替えるもので、プロンプト本文は日本語のまま固定である（厳格採点の挙動が日本語の言い回しに依存してチューニングされているため、プロンプト自体は翻訳しない）。JSONのキー名と `miss_categories[].id` は言語に関係なく不変。未知の値は `resolve_locale()` が `"ja"` に丸める。
+
 ### `POST /api/answer/evaluate`
 - リクエスト: `{ "session_id": "int", "chunk": <CodeChunk dict>, "question_data": <question/generateのdata>, "user_answer": "string", "target_score": "int" }`
 - レスポンス:
@@ -140,7 +144,9 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
     "score_details": [
       { "name": "string", "score": "int", "max": "int", "reason": "string" }
     ],
-    "miss_categories": ["string", "..."],
+    "miss_categories": [
+      { "id": "string (集計キー: 言語非依存の安定ID)", "label": "string (表示用テキスト)" }
+    ],
     "feedback": "string",
     "history_summary": [
       { "score": "int", "is_passed": "bool", "answered_at": "string (ISO8601)" }
@@ -166,10 +172,12 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
         "last_feedback": "string"
       }
     },
-    "top_weaknesses": [{ "category": "string", "count": "int" }]
+    "top_weaknesses": [{ "id": "string", "label": "string", "count": "int" }]
   }
 }
 ```
+
+> 📌 **`miss_categories` / `top_weaknesses` の集計キー**: 集計は必ず `id`（言語にも表記にも依存しない安定ID）の完全一致で行い、`label` は表示専用。以前は自由記述の日本語ラベルをそのまま集計キーにしていたため、「例外クラス名の欠落」と「例外クラス名の見落とし」のような表記揺れで同じ弱点が別タグに分裂していた（実測: 履歴103件に対しユニークタグ74種）。`id` の語彙は [`codelitmus/llm.py`](../vscode-extension/codelitmus/llm.py) の `MISS_CATEGORY_VOCAB` にあり、語彙外は `other:` プレフィックス付きの英語snake_caseに隔離される。旧形式（文字列の配列）で保存された履歴は `normalize_miss_categories()` がラベル自身をIDとみなして読むため、過去データも従来どおり集計される。
 
 > ⚠ **envelopeの不整合**: 他の3エンドポイントはペイロードを`data`キーに入れるが、このエンドポイントだけ`analytics`キーを使う（Webview側`index.html`のコードでも`json.analytics`として読んでいる — `json.data`ではない）。新規エンドポイントを追加する際はこの不整合を広げないよう`data`に統一することを推奨。
 

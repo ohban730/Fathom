@@ -24,6 +24,35 @@ def normalize_file_path(file_path: str) -> str:
     """Windowsのドライブレター等の大文字小文字差異で同じファイルが別プロジェクト扱いにならないよう正規化する"""
     return os.path.normcase(os.path.normpath(file_path))
 
+def normalize_miss_categories(raw: Any) -> List[Dict[str, str]]:
+    """miss_categories を必ず `[{"id": ..., "label": ...}]` の形に揃える。
+
+    `id` は集計キー（言語非依存の安定ID）、`label` は表示用テキスト。
+    苦手タグの集計は `id` の完全一致で行うため、表示文言が揺れても
+    （「例外クラス名の欠落」/「例外クラス名の見落とし」）同じ弱点は1つに集約される。
+
+    旧形式（`["戻り値仕様の欠落", ...]` という日本語文字列の配列）で保存された
+    履歴もそのまま読めるよう、文字列はラベル自身をIDとみなして変換する。
+    この場合、旧データ同士は従来どおり集計されるが、新形式の安定IDとは
+    別タグとして並ぶ（過去の日本語ラベルからIDを機械的に復元する手段がないため、
+    LLMによる遡及分類は行わない）。
+    """
+    result: List[Dict[str, str]] = []
+    for item in raw or []:
+        if isinstance(item, dict):
+            cat_id = str(item.get("id") or "").strip()
+            label = str(item.get("label") or "").strip()
+        elif isinstance(item, str):
+            cat_id = label = item.strip()
+        else:
+            continue
+
+        if not cat_id and not label:
+            continue
+        # 片方しか無い場合は互いに補完する（LLMがどちらかを省いた場合の保険）
+        result.append({"id": cat_id or label, "label": label or cat_id})
+    return result
+
 def _merge_duplicate_projects(cursor: sqlite3.Cursor) -> None:
     """正規化後のパスが衝突する既存プロジェクトを1つに統合する（file_path列の正規化前に生まれた分裂の後方互換マイグレーション）"""
     cursor.execute("SELECT * FROM projects")
@@ -223,13 +252,13 @@ def save_qa_history(
     user_answer: str,
     score: int,
     score_details: Optional[List[Dict[str, Any]]] = None,
-    miss_categories: Optional[List[str]] = None,
+    miss_categories: Optional[List[Dict[str, str]]] = None,
     feedback: str = "",
     is_passed: bool = False,
     db_path: str = DEFAULT_DB_PATH,
 ) -> int:
     score_details_json = json.dumps(score_details or [], ensure_ascii=False)
-    miss_categories_json = json.dumps(miss_categories or [], ensure_ascii=False)
+    miss_categories_json = json.dumps(normalize_miss_categories(miss_categories), ensure_ascii=False)
     now = datetime.now().isoformat()
 
     with get_connection(db_path) as conn:
@@ -260,7 +289,9 @@ def get_qa_histories_for_session(session_id: int, db_path: str = DEFAULT_DB_PATH
         for r in rows:
             d = dict(r)
             d["score_details"] = json.loads(d["score_details"]) if d["score_details"] else []
-            d["miss_categories"] = json.loads(d["miss_categories"]) if d["miss_categories"] else []
+            d["miss_categories"] = normalize_miss_categories(
+                json.loads(d["miss_categories"]) if d["miss_categories"] else []
+            )
             result.append(d)
         return result
 
@@ -327,13 +358,18 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
         rows = cursor.fetchall()
 
         chunk_summary = {}
-        all_miss_categories = {}
+        # 集計は id（言語非依存の安定ID）で行う。表示ラベルは最後に見たものを採用する
+        # ため、途中で出力言語を切り替えても集計が分裂せず、表示は最新の言語に揃う。
+        miss_counts: Dict[str, int] = {}
+        miss_labels: Dict[str, str] = {}
 
         for r in rows:
             chunk = r["chunk_ref"]
             score = r["score"]
             passed = bool(r["is_passed"])
-            misses = json.loads(r["miss_categories"]) if r["miss_categories"] else []
+            misses = normalize_miss_categories(
+                json.loads(r["miss_categories"]) if r["miss_categories"] else []
+            )
 
             if chunk not in chunk_summary:
                 chunk_summary[chunk] = {
@@ -355,10 +391,11 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
                 chunk_summary[chunk]["last_miss_categories"] = misses
 
             for m in misses:
-                all_miss_categories[m] = all_miss_categories.get(m, 0) + 1
+                miss_counts[m["id"]] = miss_counts.get(m["id"], 0) + 1
+                miss_labels[m["id"]] = m["label"]
 
         # 苦手順（出現回数順）にソート
-        top_weaknesses = sorted(all_miss_categories.items(), key=lambda x: x[1], reverse=True)
+        top_weaknesses = sorted(miss_counts.items(), key=lambda x: x[1], reverse=True)
 
         # 「自由課題」の解禁は直近の合否ではなく、過去に一度でも合格したことがあるかで判定する
         # (テスト中の適当な1回の回答で「未達成」に巻き戻ってしまうのを防ぐため)
@@ -368,7 +405,9 @@ def get_project_analytics(project_id: int, db_path: str = DEFAULT_DB_PATH) -> Di
         return {
             "project_id": project_id,
             "chunk_summary": chunk_summary,
-            "top_weaknesses": [{"category": k, "count": v} for k, v in top_weaknesses],
+            "top_weaknesses": [
+                {"id": k, "label": miss_labels.get(k, k), "count": v} for k, v in top_weaknesses
+            ],
             "total_chunks": total_chunks,
             "is_fully_mastered": is_fully_mastered
         }

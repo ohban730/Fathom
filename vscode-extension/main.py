@@ -52,11 +52,15 @@ class SessionStartRequest(BaseModel):
     file_path: str
     target_score: int = 70
 
+# locale: LLMが生成する文章(質問・フィードバック・自由課題)の出力言語。
+# プロンプト本文は日本語のまま、出力言語だけを切り替える(codelitmus/llm.py 参照)。
+# 未対応の値が来ても resolve_locale() が既定値に丸めるため、ここでは検証しない。
 class QuestionGenerateRequest(BaseModel):
     chunk: Dict[str, Any]
     axis: str = "構造軸"
     difficulty: str = "標準"
     mode: str = "しっかり"
+    locale: str = "ja"
 
 class AnswerEvaluateRequest(BaseModel):
     session_id: int
@@ -64,12 +68,14 @@ class AnswerEvaluateRequest(BaseModel):
     question_data: Dict[str, Any]
     user_answer: str
     target_score: int = 70
+    locale: str = "ja"
 
 class OllamaModelSetRequest(BaseModel):
     model: str
 
 class ExplorationGenerateRequest(BaseModel):
     file_path: str
+    locale: str = "ja"
 
 # ──────────────────────────────────────────
 # API エンドポイント
@@ -142,7 +148,8 @@ def generate_question(req: QuestionGenerateRequest):
             chunk_obj,
             axis=req.axis,
             difficulty=req.difficulty,
-            mode=req.mode
+            mode=req.mode,
+            locale=req.locale
         )
         return {
             "status": "success",
@@ -161,7 +168,8 @@ def evaluate_answer(req: AnswerEvaluateRequest):
             chunk=chunk_obj,
             question_data=req.question_data,
             user_answer=req.user_answer,
-            target_score=req.target_score
+            target_score=req.target_score,
+            locale=req.locale
         )
         return {
             "status": "success",
@@ -222,7 +230,8 @@ def generate_exploration(req: ExplorationGenerateRequest):
         result = core.generate_exploration_ideas(
             project_id=project["id"],
             chunks=chunks,
-            top_weaknesses=analytics.get("top_weaknesses", [])
+            top_weaknesses=analytics.get("top_weaknesses", []),
+            locale=req.locale
         )
         return {
             "status": "success",

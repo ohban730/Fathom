@@ -71,6 +71,19 @@
           "type": "string",
           "default": "",
           "description": "%configuration.pythonPath.description%"
+        },
+        "codelitmus.outputLanguage": {
+          "type": "string",
+          "enum": [
+            "ja",
+            "en"
+          ],
+          "enumDescriptions": [
+            "%configuration.outputLanguage.ja%",
+            "%configuration.outputLanguage.en%"
+          ],
+          "default": "ja",
+          "description": "%configuration.outputLanguage.description%"
         }
       }
     }

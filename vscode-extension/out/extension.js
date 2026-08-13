@@ -13,6 +13,13 @@ const child_process_1 = require("child_process");
 function createNonce() {
     return crypto.randomBytes(16).toString('base64');
 }
+// LLMが生成する文章(質問・採点フィードバック・自由課題)の出力言語。
+// パネルのUI文言自体は日本語固定なので、VS Codeの表示言語(vscode.env.language)には
+// あえて追従させず、明示的な設定でのみ切り替える。表示言語に自動追従させると、
+// 英語UIでVS Codeを使っている日本語話者の出題が突然英語になってしまうため。
+function getOutputLocale() {
+    return vscode.workspace.getConfiguration('codelitmus').get('outputLanguage', 'ja');
+}
 function findFreePort() {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
@@ -184,7 +191,14 @@ class CodeLitmusViewProvider {
     setApiBase(apiBase) {
         this.apiBase = apiBase;
         if (this.view && this.isReady) {
-            this.view.webview.postMessage({ command: 'backendReady', apiBase });
+            this.view.webview.postMessage({ command: 'backendReady', apiBase, locale: getOutputLocale() });
+        }
+    }
+    // 設定 codelitmus.outputLanguage の変更をWebviewへ伝える。
+    // 反映されるのは以後に生成する質問からで、生成済みの履歴は元の言語のまま残る。
+    notifyLocaleChanged() {
+        if (this.view && this.isReady) {
+            this.view.webview.postMessage({ command: 'localeChanged', locale: getOutputLocale() });
         }
     }
     postMessage(message) {
@@ -223,6 +237,11 @@ function activate(context) {
         }
     });
     context.subscriptions.push({ dispose: () => backend.stop() });
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('codelitmus.outputLanguage')) {
+            provider.notifyLocaleChanged();
+        }
+    }));
     // アクティブエディタ変更イベントの監視（ファイル切り替え時の自動追従）
     vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor && editor.document && !editor.document.isUntitled) {

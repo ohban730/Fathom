@@ -476,6 +476,10 @@
       userAnswer: "",
       lastEvalForChunk: null,
       projectAnalytics: null,
+      // LLMが生成する文章(質問・フィードバック・自由課題)の出力言語。
+      // 設定 codelitmus.outputLanguage の値を拡張ホストから受け取る。
+      // このパネルのUI文言自体は日本語固定で、切り替わるのはLLMの出力だけ。
+      locale: "ja",
       chunkResults: {}, // chunkIdx -> { passed: bool, score: number }
       selectedPromptAngles: new Set() // ChatGPT/Claude用プロンプトに含める観点(Chunkが変わるたびリセット)
     };
@@ -526,7 +530,13 @@
         const message = event.data;
         if (message.command === 'backendReady') {
           API_BASE = message.apiBase;
+          if (message.locale) state.locale = message.locale;
           checkHealth();
+          return;
+        }
+        if (message.command === 'localeChanged') {
+          // 設定変更は次に生成する質問から反映される(生成済みの履歴は元の言語のまま残る)
+          state.locale = message.locale || 'ja';
           return;
         }
         if (message.command === 'initSession' || message.command === 'switchFile') {
@@ -952,8 +962,12 @@
       const missTags = state.lastEvalForChunk?.miss_categories
         || state.projectAnalytics?.chunk_summary?.[chunk.name]?.last_miss_categories
         || [];
+      // miss_categories は `{id, label}` の配列。検索ワードには表示用の label を使う
+      // (id は集計用の英語snake_caseなので検索ワードには向かない)。
       missTags.forEach(tag => {
-        const cleanTag = tag.replace(/の見落とし/g, '').replace(/の欠落/g, '').replace(/の不足/g, '');
+        const rawLabel = (tag && tag.label) || '';
+        if (!rawLabel) return;
+        const cleanTag = rawLabel.replace(/の見落とし/g, '').replace(/の欠落/g, '').replace(/の不足/g, '');
         if (seen.has(cleanTag)) return;
         seen.add(cleanTag);
         items.push({ label: `Python ${cleanTag}`, query: `Python ${cleanTag} とは` });
@@ -1017,7 +1031,7 @@
             <div class="font-bold text-brand-amber mb-1.5 flex items-center gap-1.5 font-display">💡 再回答のための着眼点ガイド (丸パクリ防止)</div>
             <p class="text-zinc-300 mb-2.5">${escapeHtml(feedback)}</p>
             <div class="flex flex-wrap gap-1.5 mb-3">
-              ${missTags.map(tag => `<span class="px-2 py-0.5 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">${escapeHtml(tag)}</span>`).join('')}
+              ${missTags.map(tag => `<span class="px-2 py-0.5 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">${escapeHtml((tag && tag.label) || '')}</span>`).join('')}
             </div>
             <div class="pt-3 border-t border-brand-amber/20 flex flex-wrap gap-3">
               <div class="popover-wrapper">
@@ -1309,7 +1323,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           cache: 'no-store',
-          body: JSON.stringify({ chunk: currentChunk, axis: axis, difficulty: state.difficulty })
+          body: JSON.stringify({ chunk: currentChunk, axis: axis, difficulty: state.difficulty, locale: state.locale })
         });
         const json = await res.json();
         typingNode.remove();
@@ -1451,7 +1465,8 @@
             chunk: currentChunk,
             question_data: state.currentQuestion,
             user_answer: text,
-            target_score: state.targetScore
+            target_score: state.targetScore,
+            locale: state.locale
           })
         });
         const json = await res.json();
@@ -1571,7 +1586,7 @@
           if (analytics.top_weaknesses && analytics.top_weaknesses.length > 0) {
             weakList.innerHTML = analytics.top_weaknesses.map(w => `
               <span class="px-2.5 py-1 rounded bg-brand-red/15 text-red-300 border border-brand-red/30 font-medium">
-                ${escapeHtml(w.category)} (${escapeHtml(String(w.count))}回)
+                ${escapeHtml(w.label)} (${escapeHtml(String(w.count))}回)
               </span>
             `).join('');
           } else {
@@ -1621,7 +1636,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           cache: 'no-store',
-          body: JSON.stringify({ file_path: state.filePath })
+          body: JSON.stringify({ file_path: state.filePath, locale: state.locale })
         });
         const json = await res.json();
         document.getElementById('exploration-loading').classList.add('hidden');

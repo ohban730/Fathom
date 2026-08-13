@@ -5,6 +5,7 @@ CodeLitmus — LLMクライアント & プロンプト構築モジュール (cod
 - コードに応じた「動的評価項目（ルーブリック）」の生成
 - 無解・否定文章に対する高精度0点ガード
 - 言及がない項目への厳格な0点判定
+- 出力言語(locale)の指定と、苦手カテゴリの安定ID語彙
 """
 import json
 import requests
@@ -12,6 +13,124 @@ import re
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 from codelitmus.parser import CodeChunk
+
+# ---------------------------------------------------------------------------
+# 出力言語(locale)
+# ---------------------------------------------------------------------------
+# プロンプト本文は日本語のまま維持し、「出力の言語」だけをここで切り替える。
+# プロンプト全体を各言語に翻訳しない理由: 厳格採点の挙動が日本語の言い回し
+# (「絶対に高得点をつけてはなりません」等)に依存してチューニングされており、
+# 翻訳すると採点基準そのものが変わってしまうため。指示と出力の言語が異なることは
+# LLMにとって通常のタスクであり、実運用上の問題は出力言語の混在(下記対策)のみ。
+DEFAULT_LOCALE = "ja"
+
+LOCALES: Dict[str, Dict[str, str]] = {
+    "ja": {
+        "name": "日本語",
+        # 対象言語自身で書いた指示。日本語の指示だけだと小さいモデルが
+        # 生成の後半で元の言語に引き戻される事故が起きるため、二重に指示する。
+        "directive": "すべての質問文・評価項目名・理由・フィードバックを日本語で記述してください。",
+    },
+    "en": {
+        "name": "English",
+        "directive": "Write every question, rubric item name, reason, and feedback string in English.",
+    },
+}
+
+def resolve_locale(locale: Optional[str]) -> str:
+    """未知のロケールが来ても落とさず既定値に丸める（VS Codeは`ja`以外にも`en-US`等を返すため）"""
+    if not locale:
+        return DEFAULT_LOCALE
+    key = str(locale).split("-")[0].lower()
+    return key if key in LOCALES else DEFAULT_LOCALE
+
+def build_language_directive(locale: str) -> str:
+    """プロンプト末尾に置く出力言語の指示ブロック。
+
+    末尾に置くのは意図的で、長いプロンプトでは直近の指示ほど効きやすいため。
+    加えて各プロンプトの出力フォーマット節にも同じ指示を1行入れている。
+    """
+    conf = LOCALES[resolve_locale(locale)]
+    return f"""
+【🌐 出力言語 (最優先・絶対順守)】
+- JSONの**キー名**（`question` / `rubric` / `score_details` / `miss_categories` / `feedback` など）は、
+  上記フォーマットのまま英語で固定してください。**キー名の翻訳は絶対に禁止です**
+  （プログラムがキー名でパースするため、翻訳するとエラーになります）。
+- JSONの**値のうち、人間が読む文章はすべて「{conf['name']}」で記述**してください。
+- {conf['directive']}
+- ただし `miss_categories[].id` だけは例外で、言語に関係なく英語のsnake_caseで固定します。
+"""
+
+# ---------------------------------------------------------------------------
+# 苦手カテゴリの安定ID語彙
+# ---------------------------------------------------------------------------
+# LLMに自由記述の日本語ラベルを返させていた頃は、同じ弱点が
+# 「例外クラス名の欠落」/「例外クラス名の見落とし」のように表記揺れで別タグに
+# 分裂し、苦手タグの累積集計が意味をなさなくなっていた（実測: 履歴103件に対し
+# ユニークタグ74種）。集計は言語にも表記にも依存しない `id` で行い、
+# `label` は表示専用とする。
+#
+# ここに無い、そのコード固有の弱点は `other:<english_snake_case>` を使わせる。
+MISS_CATEGORY_VOCAB: Dict[str, Dict[str, str]] = {
+    "no_answer":                  {"ja": "内容未記述・理解不足",     "en": "No answer / no understanding"},
+    "missing_return_spec":        {"ja": "戻り値仕様の欠落",         "en": "Missing return value spec"},
+    "missing_exception_detail":   {"ja": "例外クラス名・例外型の欠落", "en": "Missing exception class/type"},
+    "missing_edge_case":          {"ja": "境界値・異常系チェックの見落とし", "en": "Missing edge/error case"},
+    "missing_type_check":         {"ja": "型チェックの見落とし",     "en": "Missing type check"},
+    "missing_calculation_detail": {"ja": "計算式・アルゴリズム仕様の記述欠落", "en": "Missing calculation/algorithm detail"},
+    "missing_validation_intent":  {"ja": "検証処理の目的の見落とし", "en": "Missing intent of validation"},
+    "missing_call_relation":      {"ja": "呼び出し関係・データ受け渡しの説明欠落", "en": "Missing call/data-flow relation"},
+    "missing_side_effect":        {"ja": "副作用・状態変更への言及欠落", "en": "Missing side effect / state change"},
+    "shallow_explanation":        {"ja": "技術的な説明が浅い",       "en": "Explanation too shallow"},
+}
+
+def miss_category(cat_id: str, locale: str = DEFAULT_LOCALE) -> Dict[str, str]:
+    """語彙IDから `{"id", "label"}` を作る（コード側で苦手タグを立てる箇所用）"""
+    loc = resolve_locale(locale)
+    entry = MISS_CATEGORY_VOCAB.get(cat_id)
+    return {"id": cat_id, "label": entry[loc] if entry else cat_id}
+
+def canonicalize_miss_categories(raw: Any, locale: str = DEFAULT_LOCALE) -> List[Dict[str, str]]:
+    """LLMが返した miss_categories を `[{"id", "label"}]` に整える。
+
+    - 既知の語彙IDなら、LLMが返したラベルではなく語彙側の表記に揃える
+      （同じIDに対して毎回違う言い回しが表示されるのを防ぐ）
+    - 未知のIDは `other:` を付けて隔離し、ラベルはLLMのものを使う
+    - 旧形式（文字列のみ）が来た場合はラベル自身をIDとして扱う
+    """
+    loc = resolve_locale(locale)
+    result: List[Dict[str, str]] = []
+    seen = set()
+
+    for item in raw or []:
+        if isinstance(item, dict):
+            cat_id = str(item.get("id") or "").strip()
+            label = str(item.get("label") or "").strip()
+        elif isinstance(item, str):
+            cat_id = label = item.strip()
+        else:
+            continue
+        if not cat_id and not label:
+            continue
+
+        if cat_id in MISS_CATEGORY_VOCAB:
+            label = MISS_CATEGORY_VOCAB[cat_id][loc]
+        elif cat_id and not cat_id.startswith("other:") and re.fullmatch(r"[a-z0-9_]+", cat_id):
+            # 語彙に無いsnake_caseは、将来語彙が増えたときの衝突を避けるため隔離する
+            cat_id = f"other:{cat_id}"
+        elif not cat_id:
+            cat_id = label
+
+        if cat_id in seen:
+            continue
+        seen.add(cat_id)
+        result.append({"id": cat_id, "label": label or cat_id})
+
+    return result
+
+def _miss_category_menu() -> str:
+    """プロンプトに埋め込む語彙の一覧（IDと日本語の意味の対応表）"""
+    return "\n".join(f'  - "{k}": {v["ja"]}' for k, v in MISS_CATEGORY_VOCAB.items())
 
 class LLMClient(ABC):
     """LLM通信を抽象化する基底クラス (管理番号5-1-1)"""
@@ -380,7 +499,14 @@ class MockLLMClient(LLMClient):
 # プロンプト生成ヘルパー関数
 # ──────────────────────────────────────────
 
-def build_question_prompt(chunk: CodeChunk, axis: str = "構造軸", difficulty: str = "標準", mode: str = "しっかり") -> str:
+def build_question_prompt(
+    chunk: CodeChunk,
+    axis: str = "構造軸",
+    difficulty: str = "標準",
+    mode: str = "しっかり",
+    locale: str = DEFAULT_LOCALE,
+) -> str:
+    lang = LOCALES[resolve_locale(locale)]["name"]
     related_note = ""
     if chunk.calls:
         related_note = f"""
@@ -412,23 +538,32 @@ def build_question_prompt(chunk: CodeChunk, axis: str = "構造軸", difficulty:
 ※ `rubric` にはこのコードChunkで検証すべき固有の項目（合計100点満点になるように3〜4項目）を定義してください。
 ※ `mermaid_diagram` には ```mermaid マークダウンは含めず、純粋なMermaidの定義テキストのみを出力してください。
 ※ `mermaid_diagram` は必ず1行目に `graph TD` または `sequenceDiagram` などの図種別宣言を書いてください（省略するとパースに失敗します）。
+※ `question` / `rubric[].name` / `mermaid_diagram` 内のラベルは、すべて「{lang}」で記述してください。
 ```json
 {{
-  "question": "質問文テキスト",
+  "question": "質問文テキスト（{lang}）",
   "axis": "{axis}",
   "difficulty": "{difficulty}",
   "rubric": [
-    {{"name": "項目1の名称", "max": 25}},
-    {{"name": "項目2の名称", "max": 25}},
-    {{"name": "項目3の名称", "max": 25}},
-    {{"name": "項目4の名称", "max": 25}}
+    {{"name": "項目1の名称（{lang}）", "max": 25}},
+    {{"name": "項目2の名称（{lang}）", "max": 25}},
+    {{"name": "項目3の名称（{lang}）", "max": 25}},
+    {{"name": "項目4の名称（{lang}）", "max": 25}}
   ],
   "mermaid_diagram": "graph TD\\n    A[\"関数呼び出し\"] --> B[\"処理判定\"]"
 }}
 ```
-"""
+{build_language_directive(locale)}"""
 
-def build_evaluation_prompt(chunk: CodeChunk, question: str, user_answer: str, target_score: int = 70, rubric: Optional[List[Dict[str, Any]]] = None) -> str:
+def build_evaluation_prompt(
+    chunk: CodeChunk,
+    question: str,
+    user_answer: str,
+    target_score: int = 70,
+    rubric: Optional[List[Dict[str, Any]]] = None,
+    locale: str = DEFAULT_LOCALE,
+) -> str:
+    lang = LOCALES[resolve_locale(locale)]["name"]
     rubric_str = ""
     if rubric:
         rubric_str = "【推奨評価項目（参考）】\n" + "\n".join([f"- {r.get('name')}: 配点 {r.get('max')}点" for r in rubric])
@@ -463,25 +598,43 @@ def build_evaluation_prompt(chunk: CodeChunk, question: str, user_answer: str, t
 【体験設計原則】
 - 採点が低くてもポジティブ先行で「理解できている部分」を褒めた上、足りない要素への「次の一手ヒント」をアドバイス（feedback）に記載してください。
 
+【`miss_categories` の指定 (集計に使うため厳守)】
+- 弱点は **必ず下記の語彙IDから選んで** `id` に入れてください。学習者の苦手傾向は
+  この `id` の一致で累積集計されるため、同じ弱点には常に同じIDを使う必要があります。
+{_miss_category_menu()}
+- どの語彙にも当てはまらない、このコード固有の弱点に限り `other:` を付けた
+  英語のsnake_caseを作ってください（例: `other:numpy_argmax_semantics`）。
+  `id` は言語設定に関係なく常に英語のsnake_caseです。
+- `label` は画面表示用の短い文言で、こちらは「{lang}」で書いてください。
+
 【要求出力フォーマット (必ず以下のJSONのみを出力してください)】
+※ `score_details[].name` / `score_details[].reason` / `feedback` / `miss_categories[].label` は、すべて「{lang}」で記述してください。
 ```json
 {{
   "score": 45,
   "score_details": [
-    {{"name": "コード固有の項目1", "score": 25, "max": 25, "reason": "・・・"}},
-    {{"name": "コード固有の項目2", "score": 20, "max": 25, "reason": "・・・"}},
-    {{"name": "コード固有の項目3", "score": 0, "max": 25, "reason": "説明が欠落しています。"}},
-    {{"name": "コード固有の項目4", "score": 0, "max": 25, "reason": "未言及のため0点。"}}
+    {{"name": "コード固有の項目1（{lang}）", "score": 25, "max": 25, "reason": "・・・（{lang}）"}},
+    {{"name": "コード固有の項目2（{lang}）", "score": 20, "max": 25, "reason": "・・・（{lang}）"}},
+    {{"name": "コード固有の項目3（{lang}）", "score": 0, "max": 25, "reason": "説明が欠落しています。"}},
+    {{"name": "コード固有の項目4（{lang}）", "score": 0, "max": 25, "reason": "未言及のため0点。"}}
   ],
-  "miss_categories": ["特定の検証条件の見落とし"],
+  "miss_categories": [
+    {{"id": "missing_validation_intent", "label": "検証処理の目的の見落とし"}},
+    {{"id": "missing_return_spec", "label": "戻り値仕様の欠落"}}
+  ],
   "feedback": "関数の目的の一部は理解できています！\\n💡 戻り値の仕様と例外条件について言及を追加して再チャレンジしてみましょう。",
   "is_passed": false
 }}
 ```
-"""
+{build_language_directive(locale)}"""
 
-def build_exploration_prompt(chunks: List[CodeChunk], top_weaknesses: Optional[List[Dict[str, Any]]] = None) -> str:
+def build_exploration_prompt(
+    chunks: List[CodeChunk],
+    top_weaknesses: Optional[List[Dict[str, Any]]] = None,
+    locale: str = DEFAULT_LOCALE,
+) -> str:
     """全Chunk合格後に提示する、自由課題（Bloom創造レベルの発展的アイデア）提案用プロンプトを構築"""
+    lang = LOCALES[resolve_locale(locale)]["name"]
     chunk_overview = "\n\n".join([
         f"■ {c.name} ({c.chunk_type})\n呼び出し先: {', '.join(c.calls) if c.calls else 'なし'}\n```python\n{c.code_segment}\n```"
         for c in chunks
@@ -489,7 +642,7 @@ def build_exploration_prompt(chunks: List[CodeChunk], top_weaknesses: Optional[L
 
     weakness_note = ""
     if top_weaknesses:
-        tags = ", ".join([w.get("category", "") for w in top_weaknesses[:5] if w.get("category")])
+        tags = ", ".join([w.get("label", "") for w in top_weaknesses[:5] if w.get("label")])
         if tags:
             weakness_note = f"\n【学習者がこれまで苦手としてきた観点】\n{tags}\n（得意な部分を土台にしつつ、これらの観点を自然に使う課題があれば歓迎します）\n"
 
@@ -509,16 +662,17 @@ def build_exploration_prompt(chunks: List[CodeChunk], top_weaknesses: Optional[L
 - 各提案は「タイトル」「何をするか(2〜3文)」「なぜ面白いか・何が身につくか(1文)」で構成すること
 
 【要求出力フォーマット (必ず以下のJSONのみを出力してください)】
+※ `title` / `description` / `hook` は、すべて「{lang}」で記述してください。
 ```json
 {{
   "ideas": [
-    {{"title": "提案タイトル", "description": "具体的に何を作る/変更するか", "hook": "なぜ面白いか・何が身につくか"}},
+    {{"title": "提案タイトル（{lang}）", "description": "具体的に何を作る/変更するか（{lang}）", "hook": "なぜ面白いか・何が身につくか（{lang}）"}},
     {{"title": "...", "description": "...", "hook": "..."}},
     {{"title": "...", "description": "...", "hook": "..."}}
   ]
 }}
 ```
-"""
+{build_language_directive(locale)}"""
 
 def parse_llm_json(response_text: str) -> Dict[str, Any]:
     """LLMのレスポンスから JSON 部分を抽出してパース"""
@@ -535,7 +689,7 @@ def parse_llm_json(response_text: str) -> Dict[str, Any]:
             "question": response_text,
             "score": 40,
             "score_details": [{"name": "回答の具体性", "score": 40, "max": 100, "reason": "自動パース不可のため簡易評価"}],
-            "miss_categories": ["記述の曖昧さ"],
+            "miss_categories": [{"id": "shallow_explanation", "label": MISS_CATEGORY_VOCAB["shallow_explanation"]["ja"]}],
             "feedback": response_text,
             "is_passed": False
         }

@@ -3,5 +3,8 @@
   "description": "バイブコーディングの理解負債を解消し、IDE内で直感的にコード理解度を学習・検証するVS Code拡張機能",
   "command.startSession.title": "CodeLitmus: 理解度テストを開始 (現在のファイル)",
   "command.showRecentFiles.title": "CodeLitmus: 最近テストしたファイルを開く",
-  "configuration.pythonPath.description": "CodeLitmusバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのcodelitmus環境のpython.exe)。未設定の場合はバックエンドを起動できません。"
+  "configuration.pythonPath.description": "CodeLitmusバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのcodelitmus環境のpython.exe)。未設定の場合はバックエンドを起動できません。",
+  "configuration.outputLanguage.description": "LLMが生成する質問文・採点フィードバック・自由課題の出力言語。パネル内のUI文言はこの設定に関係なく日本語固定です。次に生成する質問から反映され、生成済みの履歴は作成時の言語のまま残ります。",
+  "configuration.outputLanguage.ja": "日本語",
+  "configuration.outputLanguage.en": "英語"
 }
