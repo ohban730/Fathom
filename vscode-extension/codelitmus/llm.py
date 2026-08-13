@@ -1,5 +1,5 @@
 """
-DeDoubt — LLMクライアント & プロンプト構築モジュール (dedoubt/llm.py)
+CodeLitmus — LLMクライアント & プロンプト構築モジュール (codelitmus/llm.py)
 
 - LLMClient 抽象層 (OllamaClient / MockLLMClient)
 - コードに応じた「動的評価項目（ルーブリック）」の生成
@@ -11,7 +11,7 @@ import requests
 import re
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
-from dedoubt.parser import CodeChunk
+from codelitmus.parser import CodeChunk
 
 class LLMClient(ABC):
     """LLM通信を抽象化する基底クラス (管理番号5-1-1)"""

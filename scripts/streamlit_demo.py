@@ -1,5 +1,5 @@
 """
-DeDoubt UIプロトタイプ — Streamlitで実現できる範囲のデモ
+CodeLitmus UIプロトタイプ — Streamlitで実現できる範囲のデモ
 
 管理番号5-5の必須条件:
  1. LLMから投げられた質問を表示すること
@@ -13,7 +13,7 @@ import time
 
 # ページ設定
 st.set_page_config(
-    page_title="DeDoubt — コード理解サポート",
+    page_title="CodeLitmus — コード理解サポート",
     page_icon="🧠",
     layout="wide",
 )
@@ -94,7 +94,7 @@ if "history" not in st.session_state:
 # サイドバー
 # ─────────────────────────────────────
 with st.sidebar:
-    st.title("🧠 DeDoubt")
+    st.title("🧠 CodeLitmus")
     st.caption("コード理解サポートエージェント")
     st.divider()
 

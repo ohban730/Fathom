@@ -1,5 +1,5 @@
 """
-DeDoubt — FastAPI ローカルバックエンドサーバー (main.py)
+CodeLitmus — FastAPI ローカルバックエンドサーバー (main.py)
 
 - Phase 2 VS Code 拡張機能向け REST API
 - AST解析・Ollama/Mock採点・SQLite永続化の全ロジックを統合
@@ -16,10 +16,10 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from dedoubt.core import DeDoubtCore
-from dedoubt.parser import CodeChunk, parse_code_chunks, calculate_file_hash
-from dedoubt.llm import OllamaClient, MockLLMClient, is_unknown_or_empty_answer, list_ollama_models
-from dedoubt.db import (
+from codelitmus.core import CodeLitmusCore
+from codelitmus.parser import CodeChunk, parse_code_chunks, calculate_file_hash
+from codelitmus.llm import OllamaClient, MockLLMClient, is_unknown_or_empty_answer, list_ollama_models
+from codelitmus.db import (
     get_qa_histories_for_session,
     get_chunk_history_summary,
     get_recent_projects,
@@ -29,7 +29,7 @@ from dedoubt.db import (
 )
 
 app = FastAPI(
-    title="DeDoubt Local Backend API",
+    title="CodeLitmus Local Backend API",
     description="VS Code 拡張機能向けコード理解サポート API",
     version="2.0.0"
 )
@@ -43,9 +43,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# DeDoubtCore インスタンスの初期化
-DB_PATH = os.path.join(ROOT_DIR, "dedoubt.db")
-core = DeDoubtCore(db_path=DB_PATH)
+# CodeLitmusCore インスタンスの初期化
+DB_PATH = os.path.join(ROOT_DIR, "codelitmus.db")
+core = CodeLitmusCore(db_path=DB_PATH)
 
 # リクエスト / レスポンスの Pydantic モデル定義
 class SessionStartRequest(BaseModel):
@@ -79,7 +79,7 @@ class ExplorationGenerateRequest(BaseModel):
 def read_root():
     """ルートパスアクセス時の案内"""
     return {
-        "message": "DeDoubt Local Backend API Server is running!",
+        "message": "CodeLitmus Local Backend API Server is running!",
         "docs": "http://127.0.0.1:8000/docs",
         "health": "http://127.0.0.1:8000/api/health"
     }

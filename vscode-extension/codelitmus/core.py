@@ -1,5 +1,5 @@
 """
-DeDoubt — コアセッション制御モジュール (dedoubt/core.py)
+CodeLitmus — コアセッション制御モジュール (codelitmus/core.py)
 
 - ファイルのプロジェクト登録・ハッシュ比較
 - セッションの開始・状態遷移（進行中 / 完了 / 中断）
@@ -8,8 +8,8 @@ DeDoubt — コアセッション制御モジュール (dedoubt/core.py)
 """
 import os
 from typing import List, Dict, Any, Optional
-from dedoubt.parser import parse_code_chunks, calculate_file_hash, CodeChunk
-from dedoubt.db import (
+from codelitmus.parser import parse_code_chunks, calculate_file_hash, CodeChunk
+from codelitmus.db import (
     get_or_create_project,
     create_session,
     update_session_status,
@@ -18,7 +18,7 @@ from dedoubt.db import (
     get_chunk_history_summary,
     save_exploration_ideas,
 )
-from dedoubt.llm import (
+from codelitmus.llm import (
     LLMClient,
     OllamaClient,
     MockLLMClient,
@@ -29,8 +29,8 @@ from dedoubt.llm import (
     is_unknown_or_empty_answer,
 )
 
-class DeDoubtCore:
-    def __init__(self, db_path: str = "dedoubt.db", llm_client: Optional[LLMClient] = None):
+class CodeLitmusCore:
+    def __init__(self, db_path: str = "codelitmus.db", llm_client: Optional[LLMClient] = None):
         self.db_path = db_path
         if llm_client:
             self.llm = llm_client

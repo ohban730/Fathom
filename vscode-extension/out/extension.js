@@ -70,9 +70,9 @@ class BackendServer {
         this.context = context;
     }
     async start() {
-        const pythonPath = vscode.workspace.getConfiguration('dedoubt').get('pythonPath', '');
+        const pythonPath = vscode.workspace.getConfiguration('codelitmus').get('pythonPath', '');
         if (!pythonPath) {
-            vscode.window.showErrorMessage('DeDoubt: バックエンドを起動できません。設定「dedoubt.pythonPath」にPython実行体の絶対パスを指定してください(セットアップ手順を参照)。');
+            vscode.window.showErrorMessage('CodeLitmus: バックエンドを起動できません。設定「codelitmus.pythonPath」にPython実行体の絶対パスを指定してください(セットアップ手順を参照)。');
             return undefined;
         }
         const port = await findFreePort();
@@ -87,18 +87,18 @@ class BackendServer {
             stderrTail = (stderrTail + chunk.toString()).slice(-2000);
         });
         proc.on('error', (err) => {
-            vscode.window.showErrorMessage(`DeDoubt: バックエンドの起動に失敗しました(${pythonPath}): ${err.message}`);
+            vscode.window.showErrorMessage(`CodeLitmus: バックエンドの起動に失敗しました(${pythonPath}): ${err.message}`);
         });
         proc.on('exit', (code) => {
             this.apiBase = undefined;
             if (code !== null && code !== 0) {
-                vscode.window.showErrorMessage(`DeDoubt: バックエンドが異常終了しました(code ${code})。\n${stderrTail}`);
+                vscode.window.showErrorMessage(`CodeLitmus: バックエンドが異常終了しました(code ${code})。\n${stderrTail}`);
             }
         });
         const apiBase = `http://127.0.0.1:${port}`;
         const healthy = await waitUntilHealthy(apiBase);
         if (!healthy) {
-            vscode.window.showErrorMessage('DeDoubt: バックエンドの起動確認がタイムアウトしました。dedoubt.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。');
+            vscode.window.showErrorMessage('CodeLitmus: バックエンドの起動確認がタイムアウトしました。codelitmus.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。');
             this.stop();
             return undefined;
         }
@@ -111,7 +111,7 @@ class BackendServer {
         this.apiBase = undefined;
     }
 }
-class DeDoubtViewProvider {
+class CodeLitmusViewProvider {
     constructor(context, onProgressUpdate) {
         this.context = context;
         this.onProgressUpdate = onProgressUpdate;
@@ -128,7 +128,7 @@ class DeDoubtViewProvider {
             webviewView.webview.html = fs.readFileSync(htmlPath, 'utf8');
         }
         else {
-            vscode.window.showErrorMessage(`DeDoubt Webview HTML not found: ${htmlPath}`);
+            vscode.window.showErrorMessage(`CodeLitmus Webview HTML not found: ${htmlPath}`);
             return;
         }
         // Webview 側の読み込み完了 (ready) を待ってから保留メッセージを送信するハンドシェイク
@@ -147,7 +147,7 @@ class DeDoubtViewProvider {
                 this.onProgressUpdate(message.fileName, message.current, message.total);
             }
             else if (message?.command === 'showRecentFiles') {
-                vscode.commands.executeCommand('dedoubt.showRecentFiles');
+                vscode.commands.executeCommand('codelitmus.showRecentFiles');
             }
             else if (message?.command === 'addFolderToWorkspace') {
                 vscode.commands.executeCommand('workbench.action.addRootFolder');
@@ -176,20 +176,20 @@ class DeDoubtViewProvider {
         }
     }
 }
-DeDoubtViewProvider.viewType = 'dedoubt.panelView';
+CodeLitmusViewProvider.viewType = 'codelitmus.panelView';
 function activate(context) {
-    console.log('DeDoubt VS Code Extension is active.');
+    console.log('CodeLitmus VS Code Extension is active.');
     // 対象ファイル・進捗を表示するステータスバー項目(クリックでパネルを開く)
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.command = `${DeDoubtViewProvider.viewType}.focus`;
-    statusBarItem.text = '$(sparkle) DeDoubt';
-    statusBarItem.tooltip = 'DeDoubtパネルを開く';
+    statusBarItem.command = `${CodeLitmusViewProvider.viewType}.focus`;
+    statusBarItem.text = '$(sparkle) CodeLitmus';
+    statusBarItem.tooltip = 'CodeLitmusパネルを開く';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
-    const provider = new DeDoubtViewProvider(context, (fileName, current, total) => {
-        statusBarItem.text = `$(sparkle) DeDoubt: ${fileName} (${current}/${total})`;
+    const provider = new CodeLitmusViewProvider(context, (fileName, current, total) => {
+        statusBarItem.text = `$(sparkle) CodeLitmus: ${fileName} (${current}/${total})`;
     });
-    context.subscriptions.push(vscode.window.registerWebviewViewProvider(DeDoubtViewProvider.viewType, provider));
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider(CodeLitmusViewProvider.viewType, provider));
     const backend = new BackendServer(context);
     backend.start().then((apiBase) => {
         if (apiBase) {
@@ -210,8 +210,8 @@ function activate(context) {
             }
         }
     });
-    // コマンド登録: dedoubt.startSession (Ctrl + Alt + D)
-    let disposable = vscode.commands.registerCommand('dedoubt.startSession', async () => {
+    // コマンド登録: codelitmus.startSession (Ctrl + Alt + D)
+    let disposable = vscode.commands.registerCommand('codelitmus.startSession', async () => {
         let filePath = "";
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document && !editor.document.isUntitled) {
@@ -222,7 +222,7 @@ function activate(context) {
                 canSelectFiles: true,
                 canSelectFolders: false,
                 canSelectMany: false,
-                openLabel: 'DeDoubt 理解度テストを開始',
+                openLabel: 'CodeLitmus 理解度テストを開始',
                 filters: { 'Python Files': ['py'] }
             });
             if (uri && uri.length > 0) {
@@ -230,11 +230,11 @@ function activate(context) {
             }
         }
         if (!filePath) {
-            vscode.window.showWarningMessage('DeDoubt: テスト対象のファイルが選択されていません。');
+            vscode.window.showWarningMessage('CodeLitmus: テスト対象のファイルが選択されていません。');
             return;
         }
-        // パネル領域のDeDoubtビューを表示（未生成なら resolveWebviewView をトリガーする）
-        await vscode.commands.executeCommand(`${DeDoubtViewProvider.viewType}.focus`);
+        // パネル領域のCodeLitmusビューを表示（未生成なら resolveWebviewView をトリガーする）
+        await vscode.commands.executeCommand(`${CodeLitmusViewProvider.viewType}.focus`);
         provider.postMessage({
             command: 'initSession',
             filePath: filePath,
@@ -242,17 +242,17 @@ function activate(context) {
         });
     });
     context.subscriptions.push(disposable);
-    // コマンド登録: dedoubt.showRecentFiles (フォルダをまたいだ最近のテスト対象ファイル一覧)
-    const showRecentDisposable = vscode.commands.registerCommand('dedoubt.showRecentFiles', async () => {
+    // コマンド登録: codelitmus.showRecentFiles (フォルダをまたいだ最近のテスト対象ファイル一覧)
+    const showRecentDisposable = vscode.commands.registerCommand('codelitmus.showRecentFiles', async () => {
         if (!backend.apiBase) {
-            vscode.window.showWarningMessage('DeDoubt: バックエンドがまだ起動していません。');
+            vscode.window.showWarningMessage('CodeLitmus: バックエンドがまだ起動していません。');
             return;
         }
         try {
             const json = await httpGetJson(`${backend.apiBase}/api/projects/recent?limit=15`);
             const projects = json?.data ?? [];
             if (json?.status !== 'success' || projects.length === 0) {
-                vscode.window.showInformationMessage('DeDoubt: まだテストしたファイルの履歴がありません。');
+                vscode.window.showInformationMessage('CodeLitmus: まだテストしたファイルの履歴がありません。');
                 return;
             }
             const items = projects.map((p) => ({
@@ -271,7 +271,7 @@ function activate(context) {
             }
         }
         catch (err) {
-            vscode.window.showErrorMessage(`DeDoubt: 最近のファイル取得に失敗しました。${err?.message ?? err}`);
+            vscode.window.showErrorMessage(`CodeLitmus: 最近のファイル取得に失敗しました。${err?.message ?? err}`);
         }
     });
     context.subscriptions.push(showRecentDisposable);

@@ -1,5 +1,5 @@
 """
-DeDoubt — ローカルSQLiteデータベース層 (dedoubt/db.py)
+CodeLitmus — ローカルSQLiteデータベース層 (codelitmus/db.py)
 
 ER図 (v1.1) に基づく永続化ロジック
 - projects
@@ -13,7 +13,7 @@ import os
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
-DEFAULT_DB_PATH = "dedoubt.db"
+DEFAULT_DB_PATH = "codelitmus.db"
 
 def get_connection(db_path: str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)

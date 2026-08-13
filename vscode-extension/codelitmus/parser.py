@@ -1,5 +1,5 @@
 """
-DeDoubt — AST解析 & Chunk分割モジュール (dedoubt/parser.py)
+CodeLitmus — AST解析 & Chunk分割モジュール (codelitmus/parser.py)
 
 Python の ast モジュールを利用し、ソースコードから関数・クラスの Chunk を自動抽出する。
 ファイルハッシュ (SHA256) の算定機能も提供。

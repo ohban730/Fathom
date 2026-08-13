@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "DeDoubt 拡張機能をデバッグ起動",
+      "name": "CodeLitmus 拡張機能をデバッグ起動",
       "type": "extensionHost",
       "request": "launch",
       "args": [

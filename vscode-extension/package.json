@@ -1,9 +1,17 @@
 {
-  "name": "dedoubt-vscode",
-  "displayName": "DeDoubt — コード理解サポート",
+  "name": "codelitmus-vscode",
+  "displayName": "CodeLitmus — コード理解サポート",
   "description": "バイブコーディングの理解負債を解消し、IDE内で直感的にコード理解度を学習・検証するVS Code拡張機能",
   "version": "2.0.0",
-  "publisher": "dedoubt",
+  "publisher": "codelitmus",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ohban730/CodeLitmus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ohban730/CodeLitmus/issues"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -12,27 +20,27 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:dedoubt.startSession",
-    "onCommand:dedoubt.showRecentFiles",
-    "onView:dedoubt.panelView"
+    "onCommand:codelitmus.startSession",
+    "onCommand:codelitmus.showRecentFiles",
+    "onView:codelitmus.panelView"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "dedoubt.startSession",
-        "title": "DeDoubt: 理解度テストを開始 (現在のファイル)",
+        "command": "codelitmus.startSession",
+        "title": "CodeLitmus: 理解度テストを開始 (現在のファイル)",
         "icon": "$(brain)"
       },
       {
-        "command": "dedoubt.showRecentFiles",
-        "title": "DeDoubt: 最近テストしたファイルを開く",
+        "command": "codelitmus.showRecentFiles",
+        "title": "CodeLitmus: 最近テストしたファイルを開く",
         "icon": "$(history)"
       }
     ],
     "keybindings": [
       {
-        "command": "dedoubt.startSession",
+        "command": "codelitmus.startSession",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d",
         "when": "editorTextFocus"
@@ -41,28 +49,28 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "dedoubtPanelContainer",
-          "title": "DeDoubt",
+          "id": "codelitmusPanelContainer",
+          "title": "CodeLitmus",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "dedoubtPanelContainer": [
+      "codelitmusPanelContainer": [
         {
           "type": "webview",
-          "id": "dedoubt.panelView",
-          "name": "DeDoubt"
+          "id": "codelitmus.panelView",
+          "name": "CodeLitmus"
         }
       ]
     },
     "configuration": {
-      "title": "DeDoubt",
+      "title": "CodeLitmus",
       "properties": {
-        "dedoubt.pythonPath": {
+        "codelitmus.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "DeDoubtバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのdedoubt環境のpython.exe)。未設定の場合はバックエンドを起動できません。"
+          "description": "CodeLitmusバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのcodelitmus環境のpython.exe)。未設定の場合はバックエンドを起動できません。"
         }
       }
     }
