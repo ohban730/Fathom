@@ -7,7 +7,12 @@ const fs = require("fs");
 const path = require("path");
 const net = require("net");
 const http = require("http");
+const crypto = require("crypto");
 const child_process_1 = require("child_process");
+// CSPの script-src で使う一回限りのトークン。Webviewを読み込むたびに再生成する。
+function createNonce() {
+    return crypto.randomBytes(16).toString('base64');
+}
 function findFreePort() {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
@@ -121,11 +126,14 @@ class CodeLitmusViewProvider {
         this.view = webviewView;
         this.isReady = false;
         webviewView.webview.options = {
-            enableScripts: true
+            enableScripts: true,
+            // Webviewから読み出せるディスク上の範囲をmedia/配下だけに限定する。
+            // Tailwind/Mermaid/フォントはすべて media/vendor/ に同梱してある。
+            localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')]
         };
         const htmlPath = path.join(this.context.extensionPath, 'src', 'webview', 'index.html');
         if (fs.existsSync(htmlPath)) {
-            webviewView.webview.html = fs.readFileSync(htmlPath, 'utf8');
+            webviewView.webview.html = this.buildHtml(webviewView.webview, fs.readFileSync(htmlPath, 'utf8'));
         }
         else {
             vscode.window.showErrorMessage(`CodeLitmus Webview HTML not found: ${htmlPath}`);
@@ -160,6 +168,19 @@ class CodeLitmusViewProvider {
             }
         });
     }
+    // index.html はブラウザで直接開いても崩れないよう素のHTMLとして保守しているので、
+    // Webviewへ渡す直前にプレースホルダを実際の値へ差し替える。
+    // - ${vendorUri}: media/vendor/ の vscode-webview:// URI(同梱アセットの読み込み元)
+    // - ${cspSource}: CSPで許可すべき拡張機能リソースのオリジン
+    // - ${nonce}:     このロード限りのscript-src許可トークン
+    buildHtml(webview, rawHtml) {
+        const vendorUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'vendor'));
+        const nonce = createNonce();
+        return rawHtml
+            .replace(/\$\{vendorUri\}/g, vendorUri.toString())
+            .replace(/\$\{cspSource\}/g, webview.cspSource)
+            .replace(/\$\{nonce\}/g, nonce);
+    }
     setApiBase(apiBase) {
         this.apiBase = apiBase;
         if (this.view && this.isReady) {
@@ -189,7 +210,12 @@ function activate(context) {
     const provider = new CodeLitmusViewProvider(context, (fileName, current, total) => {
         statusBarItem.text = `$(sparkle) CodeLitmus: ${fileName} (${current}/${total})`;
     });
-    context.subscriptions.push(vscode.window.registerWebviewViewProvider(CodeLitmusViewProvider.viewType, provider));
+    context.subscriptions.push(
+    // retainContextWhenHidden: パネルのタブを切り替えてもWebviewを破棄せず、
+    // 星座マップやセッションの進行状況がリセットされないようにする(CLAUDE.mdの規約)。
+    vscode.window.registerWebviewViewProvider(CodeLitmusViewProvider.viewType, provider, {
+        webviewOptions: { retainContextWhenHidden: true }
+    }));
     const backend = new BackendServer(context);
     backend.start().then((apiBase) => {
         if (apiBase) {

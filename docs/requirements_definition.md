@@ -228,6 +228,10 @@
 
 #### NFR-04: ローカル通信のみ
 - 拡張ホスト⇔Webview間はVS Codeの`postMessage`のみ。Webview⇔バックエンド間は`http://127.0.0.1:<動的ポート>`のローカルHTTPのみで、外部通信は行わない（Phase 1のNFR-02「ローカル完結」方針をPhase 3でも継続）。
+- **強制方法**（2026-08-13追加）: この要件は長らくドキュメント上の約束にとどまっており、実際にはWebviewがTailwind CSS・Mermaid.js・Google Fontsを外部CDNから読み込んでいて違反していた。現在は次の2点で実行時に強制している。
+  - 3つの依存をすべて`vscode-extension/media/vendor/`に同梱し、CDN参照を廃止した（Tailwindは`tailwind.config.js`でローカルビルド。`npm run build:css`）。
+  - `index.html`に`default-src 'none'`起点のCSPを設定し、`${cspSource}`（拡張機能の同梱リソース）と`connect-src http://127.0.0.1:*`（ローカルバックエンド）以外を全遮断した。以後、外部CDNへの参照を足しても実行時にブロックされる。
+- **例外**: 苦手タグの「🌐 検索」リンク（`<a target="_blank">`でGoogle検索を開く）のみ外部に出る。これはユーザーの明示的なクリックでVS Code外のブラウザを開く動作であり、拡張機能自身がバックグラウンドで通信するものではないため、本要件の対象外とする。
 
 #### NFR-05: Chunk境界の安定性
 - `if __name__ == "__main__":`等のエントリーポイントブロックは第一級のChunkとして扱い、再解析時にもChunk境界（星の位置）が安定するようにする（`CLAUDE.md`の「Python Chunk Parsing」規約に対応）。

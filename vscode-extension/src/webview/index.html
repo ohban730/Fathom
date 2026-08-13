@@ -3,40 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    NFR-04(ローカル通信のみ)を強制するCSP。default-src 'none' で全遮断したうえで、
+    拡張機能に同梱したリソースとローカルバックエンド(127.0.0.1)だけを許可する。
+    外部CDN/フォントへの参照を追加してもブラウザ側でブロックされるため、この規約が
+    ドキュメント上の約束ではなく実行時に検証される制約になる。
+    cspSource / nonce / vendorUri のプレースホルダは extension.ts の buildHtml() が
+    ページ読み込みごとに実際の値へ差し替える。
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; font-src ${cspSource}; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://127.0.0.1:*;">
   <title>CodeLitmus — Code Understanding Agent</title>
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              bg: '#0a0a12',
-              card: '#12131d',
-              panel: '#191a28',
-              border: '#23243a',
-              text: '#e7e7f4',
-              muted: '#8d8dae',
-              indigo: '#818cf8',
-              gold: '#fbbf24',
-              green: '#34d399',
-              amber: '#f59e0b',
-              red: '#f87171',
-            }
-          }
-        }
-      }
-    }
-  </script>
+  <!--
+    Tailwind CSS — 以前は cdn.tailwindcss.com のJIT版を読み込んでいたが、
+    tailwind.config.js を使ったローカルビルド版(media/vendor/tailwind.css)に置き換えた。
+    クラス名を文字列連結で組み立てると生成されない点に注意(tailwind.config.js のコメント参照)。
+    ビルド: npm run build:css
+  -->
+  <link rel="stylesheet" href="${vendorUri}/tailwind.css">
 
-  <!-- Mermaid.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <!-- Mermaid.js — 同梱版。バージョンは media/vendor/mermaid.VERSION、ライセンスは mermaid.LICENSE.txt -->
+  <script nonce="${nonce}" src="${vendorUri}/mermaid.min.js"></script>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
+    /* Space Grotesk の @font-face は media/vendor/tailwind.css 側に定義してある
+       (フォント実体との相対パスをCSSファイル基準で解決させるため) */
 
     body {
       background:
@@ -469,7 +460,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="${nonce}">
     // vscode拡張ホストからbackendReadyで実際のポート番号を受け取るまでのフォールバック既定値。
     // (ブラウザで直接index.htmlを開く単体プレビュー時はこの既定値のまま使う)
     let API_BASE = "http://127.0.0.1:8000";

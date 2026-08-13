@@ -76,13 +76,16 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run build",
+    "build": "npm run build:css && npm run compile",
+    "build:css": "tailwindcss -c tailwind.config.js -i src/webview/tailwind.src.css -o media/vendor/tailwind.css --minify",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "@types/vscode": "^1.75.0",
     "@types/node": "^18.x",
+    "@types/vscode": "^1.75.0",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.0.0"
   }
 }
