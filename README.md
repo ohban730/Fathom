@@ -11,12 +11,16 @@
 ## 前提
 
 - Python 3.11系
-- Node.js / npm
 - (任意) [Ollama](https://ollama.com) — ローカルLLMで採点したい場合。未導入でもMockエンジン(固定フィードバック)で動作します。
+- Node.js / npm — **リポジトリをクローンして開発・デバッグ実行する場合のみ**必要です。`.vsix`をインストールして使うだけなら不要です。
 
 ## セットアップ手順
 
-### 1. Python環境の準備
+利用の仕方によって2通りあります。**共通(手順1〜3)**をやったうえで、**パターンA(ソースからデバッグ実行)** または **パターンB(拡張機能としてインストール)** のどちらかを選んでください。
+
+> **バックエンドサーバーを手動で起動する必要はありません。** 拡張機能が有効化された時点で、`main.py`(FastAPI)を空きポートで自動的にサブプロセス起動し、VS Codeを閉じるときに停止します。Anaconda Promptなどから`uvicorn`を手動で起動しても、拡張機能は自分が起動したポートしか参照しないため使われません(二重起動になります)。
+
+### 【共通1】 Python環境の準備
 
 ```bash
 conda create -n codelitmus python=3.11
@@ -24,29 +28,22 @@ conda activate codelitmus
 pip install -r vscode-extension/requirements.txt
 ```
 
-condaを使わない場合も、`vscode-extension/requirements.txt`をpip installできる仮想環境を1つ用意してください。
+condaを使わない場合も、`vscode-extension/requirements.txt`(fastapi / uvicorn / pydantic / requests)をpip installできる仮想環境を1つ用意してください。**この環境の`python.exe`の絶対パスを後で使う**ので控えておきます。
 
-### 2. (任意) Ollamaのセットアップ
+### 【共通2】 (任意) Ollamaのセットアップ
 
-- [ollama.com](https://ollama.com)からインストールし、モデルを取得(例: `ollama pull llama3`)
-- Ollamaが起動していない/モデル未取得の場合、拡張機能は自動的にMockLLMClient(デモ用の固定フィードバック)にフォールバックします。厳格な採点をさせたい場合は必須です。
+- [ollama.com](https://ollama.com)からインストールし、**好きなモデルを1つ以上**取得する
 
-### 3. VS Code拡張機能のビルド
+  ```bash
+  ollama pull qwen2.5-coder:7b
+  ```
 
-```bash
-cd vscode-extension
-npm install
-npm run compile
-```
+- モデル名は固定されていません。pull済みのモデルの中から選んで使えます(→ [採点に使うモデルを選ぶ](#採点に使うモデルを選ぶ))
+- Ollamaが起動していない/モデル未取得の場合、拡張機能は自動的にMockLLMClient(デモ用の固定フィードバック)にフォールバックします。コード内容に応じた厳格な採点をさせたい場合はOllamaが必須です。
 
-### 4. 拡張機能の起動
+### 【共通3】 Python実行体の指定(必須)
 
-- VS Codeで`vscode-extension/`フォルダを開き、F5(Run Extension)で拡張機能開発ホストを起動する
-- または `npx @vscode/vsce package` で`.vsix`を作成し、`code --install-extension <file>.vsix`でインストールする(Marketplace/Azure DevOpsへの`publish`にはPATが別途必要)
-
-### 5. Python実行体の指定(必須)
-
-拡張機能はバックエンド(`vscode-extension/main.py`)を自動でサブプロセス起動します。使用するPython実行体を、VS Codeの`settings.json`に指定してください。
+拡張機能がバックエンドを起動するために使うPython実行体を、VS Codeの`settings.json`に絶対パスで指定します。
 
 ```json
 {
@@ -54,14 +51,68 @@ npm run compile
 }
 ```
 
-未設定の場合、拡張機能はエラーメッセージでこの設定を促します。
+未設定のままだと、パネルを開いた時点で「設定`codelitmus.pythonPath`にPython実行体の絶対パスを指定してください」というエラーが出ます。**セットアップでつまずくポイントはほぼここです。**
 
-### 6. 使い方
+条件は「**その実行体で`fastapi` / `uvicorn` / `pydantic` / `requests`がimportできること**」だけです。拡張機能はこの実行体を直接起動する(`<python.exe> -m uvicorn main:app ...`)ため、condaである必要も、事前に`conda activate`しておく必要も、PATHを通しておく必要もありません。venvの`.venv\Scripts\python.exe`やシステムPythonでも構いません。
+
+---
+
+### パターンA: ソースをクローンしてデバッグ実行する(開発者向け)
+
+コードを読んだり改造したりしたい人向け。VS Codeの拡張機能開発ホスト(Extension Development Host)で動かします。
+
+```bash
+git clone https://github.com/ohban730/CodeLitmus.git
+cd CodeLitmus/vscode-extension
+npm install
+npm run build
+```
+
+> `npm run build` は Tailwind CSSの生成(`build:css`)とTypeScriptのコンパイル(`compile`)をまとめて実行します。`src/webview/index.html`のクラス名や`tailwind.config.js`を編集したときは、`compile`だけでなく`build`を実行してください。
+
+1. VS Codeで **`vscode-extension/`フォルダ** を開く(リポジトリのルートではなくこのサブフォルダ)
+2. `F5`(Run Extension)を押す → 新しいVS Codeウィンドウ(拡張機能開発ホスト)が立ち上がる
+3. **その新しいウィンドウのほうで** Pythonファイルを開き、`Ctrl+Alt+D`
+
+`settings.json`の`codelitmus.pythonPath`は、拡張機能開発ホスト側にも引き継がれるユーザー設定に書いておくのが確実です。
+
+### パターンB: 拡張機能としてインストールして使う(利用者向け)
+
+普通のツールとして使いたい人向け。Node.js/npmは不要です。
+
+```bash
+code --install-extension codelitmus-vscode-<version>.vsix
+```
+
+- `.vsix`ファイルは[Releases](https://github.com/ohban730/CodeLitmus/releases)から取得するか、自分でクローンして `npx @vscode/vsce package` で作成します(Marketplaceへの`publish`にはPATが別途必要)
+- または VS Codeの拡張機能ビュー → 右上「…」→ **「VSIXからのインストール…」** からファイルを選択
+- インストール後、【共通1〜3】が済んでいればそのまま使えます。`.vsix`にはバックエンド(`main.py` / `codelitmus/` / `requirements.txt`)が同梱されています
+
+インストール先に同梱された`requirements.txt`は`~/.vscode/extensions/`配下にあり分かりにくいので、パッケージ名を直接指定しても構いません。
+
+```bash
+pip install fastapi "uvicorn[standard]" pydantic requests
+```
+
+---
+
+## 使い方
 
 - Pythonファイルを開いた状態で `Ctrl+Alt+D`(Macは`Cmd+Alt+D`)、またはコマンドパレットから「CodeLitmus: 理解度テストを開始」を実行
 - 画面下部のPanel領域(TERMINAL等と同じ場所)に「CodeLitmus」タブが表示され、AST解析されたChunk(関数/クラス/エントリーポイント)ごとに質問→回答→採点が進みます
+- エディタで何もファイルを開いていない状態で`Ctrl+Alt+D`を押すと、ファイル選択ダイアログが開きます
 
-### 別フォルダ・複数フォルダのファイルを対象にする
+## 採点に使うモデルを選ぶ
+
+**特定のモデルに固定されてはいません。** パネル右上の「Engine:」バッジの隣に、**pull済みのOllamaモデル一覧のドロップダウン**が表示されます。ここで選び直すと、以降の質問生成・採点にそのモデルが使われます。
+
+- 起動直後は、Ollamaが返すモデル一覧の**先頭のモデル**が自動的に選ばれます(明示的な既定モデルは持っていません)
+- Ollamaが未起動、またはpull済みモデルが1つもない場合はドロップダウンは表示されず、`Engine: Mock` になります
+- Ollamaを後から起動した場合も、ドロップダウンでモデルを選べば実LLMに切り替わります
+- **モデルの選択はVS Codeを閉じるとリセットされます**(毎回、一覧の先頭のモデルに戻ります)
+- 採点品質はモデル依存です。小さすぎるモデル(1B〜2B級)ではルーブリック付きJSONを安定して返せないことがあるため、7B級以上のコード寄りモデルを推奨します
+
+## 別フォルダ・複数フォルダのファイルを対象にする
 
 CodeLitmusはファイルの絶対パスだけで動くため、今開いているワークスペースの外にあるファイルでも制限なく理解度テストできます(パネル右上の「?」アイコンにも同じ内容を表示しています)。
 
@@ -79,6 +130,7 @@ CodeLitmusはファイルの絶対パスだけで動くため、今開いてい�
 
 - バックエンドはローカルのPython実行体が前提です。Pythonランタイム自体を同梱した配布は行っていません(自分専用+セットアップ手順公開という方針のため)。
 - Ollama未セットアップ時はMockエンジンにフォールバックし、コード内容に応じた厳格な採点にはなりません。
+- 使用するOllamaモデルを固定する設定項目はまだありません。起動のたびにpull済み一覧の先頭が選ばれるため、毎回パネルのドロップダウンで選び直す必要があります。
 
 ## 対応言語 / Language
 
