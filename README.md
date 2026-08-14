@@ -78,17 +78,32 @@ npm run build
 
 ### パターンB: 拡張機能としてインストールして使う(利用者向け)
 
-普通のツールとして使いたい人向け。Node.js/npmは不要です。
+普通のツールとして使いたい人向け。**Node.js/npmは不要です。**
+
+VS Code拡張機能は**ビルド済みのJavaScript(`out/extension.js`)を同梱した状態で配布**されます。インストール時にあなたのマシンで`npm install`やビルドが走ることはありません。
+
+#### B-1. VS Codeの拡張機能ビューからインストールする
+
+Marketplaceに公開済みであれば、**これが標準の手順**です。ブラウザやコマンドは不要です。
+
+1. VS Codeの左側のアクティビティバーから**拡張機能ビュー**(`Ctrl+Shift+X`)を開く
+2. 「CodeLitmus」を検索
+3. **「インストール」ボタンを押す** — これだけで完了
+
+#### B-2. `.vsix`ファイルからインストールする(Marketplace未公開時・手動配布時)
 
 ```bash
 code --install-extension codelitmus-vscode-<version>.vsix
 ```
 
 - `.vsix`ファイルは[Releases](https://github.com/ohban730/CodeLitmus/releases)から取得するか、自分でクローンして `npx @vscode/vsce package` で作成します(Marketplaceへの`publish`にはPATが別途必要)
-- または VS Codeの拡張機能ビュー → 右上「…」→ **「VSIXからのインストール…」** からファイルを選択
-- インストール後、【共通1〜3】が済んでいればそのまま使えます。`.vsix`にはバックエンド(`main.py` / `codelitmus/` / `requirements.txt`)が同梱されています
+- コマンドを使わず、VS Codeの拡張機能ビュー → 右上「…」→ **「VSIXからのインストール…」** からファイルを選んでも同じです
 
-インストール先に同梱された`requirements.txt`は`~/.vscode/extensions/`配下にあり分かりにくいので、パッケージ名を直接指定しても構いません。
+#### インストール後にやること
+
+**どちらの方法でも、Pythonの依存パッケージだけは自動では入りません。** 【共通1〜3】(pip install / `codelitmus.pythonPath`設定)を済ませてください。バックエンド本体(`main.py` / `codelitmus/` / `requirements.txt`)は拡張機能に同梱されているので、別途ダウンロードする必要はありません。
+
+同梱された`requirements.txt`は`~/.vscode/extensions/`配下にあって分かりにくいので、パッケージ名を直接指定しても構いません。
 
 ```bash
 pip install fastapi "uvicorn[standard]" pydantic requests
