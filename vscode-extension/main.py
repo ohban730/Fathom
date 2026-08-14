@@ -49,8 +49,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# CodeLitmusCore インスタンスの初期化
-DB_PATH = os.path.join(ROOT_DIR, "codelitmus.db")
+# 学習履歴DBの置き場所。
+# 拡張機能は ~/.vscode/extensions/<publisher>.<name>-<version>/ のように
+# バージョン番号付きのフォルダにインストールされ、更新時に古いフォルダごと
+# 削除される。ROOT_DIR(=インストール先)にDBを置くと拡張機能を更新するたびに
+# 学習履歴が消えるため、更新をまたいで残る保存領域(VS Codeの
+# globalStorageUri)を拡張機能側から環境変数で受け取る。
+# 未設定のまま単体起動された場合(手動uvicorn・テスト)は従来どおりROOT_DIR。
+DB_PATH = os.environ.get("CODELITMUS_DB_PATH", "").strip() or os.path.join(ROOT_DIR, "codelitmus.db")
+_db_dir = os.path.dirname(os.path.abspath(DB_PATH))
+if _db_dir:
+    os.makedirs(_db_dir, exist_ok=True)
 core = CodeLitmusCore(db_path=DB_PATH)
 
 # リクエスト / レスポンスの Pydantic モデル定義

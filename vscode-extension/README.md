@@ -86,7 +86,11 @@ CodeLitmusはネットワーク的にローカル完結です。コードや回�
 
 - 通信先は拡張機能が起動するローカルバックエンド(`http://127.0.0.1:<動的ポート>`)と、任意で使うOllama(`localhost:11434`)のみ
 - WebviewにはCSP(`default-src 'none'`)を設定し、外部CDN・外部フォントへのアクセスを実行時に遮断しています
-- 学習履歴はローカルのSQLite(`codelitmus.db`)にのみ保存されます
+- 学習履歴はローカルのSQLite(`codelitmus.db`)にのみ保存されます。保存先はVS Codeのグローバルストレージで、拡張機能を更新しても消えません
+  - Windows: `%APPDATA%\Code\User\globalStorage\codelitmus.codelitmus-vscode\codelitmus.db`
+  - macOS: `~/Library/Application Support/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db`
+  - Linux: `~/.config/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db`
+  - DBは初回起動時に自動生成されます。アンインストールしてもこのファイルは残るため、履歴も消したい場合は手動で削除してください
 
 唯一の例外は、苦手タグの「🌐 検索」リンクです。これはクリックしたときだけ既定のブラウザでGoogle検索を開きます。
 

@@ -140,6 +140,23 @@ CodeLitmusはファイルの絶対パスだけで動くため、今開いてい�
 - **複数フォルダを並べて操作する**: コマンドパレット(`Ctrl+Shift+P`)→ `Workspaces: Add Folder to Workspace...` で、今のリポジトリと無関係な任意のフォルダを追加する。Explorerに複数のフォルダツリーが並び、どちらのファイルをアクティブにしてもCodeLitmusは同じ挙動で追従する。共通の親フォルダを1つ開くだけでも同様の効果がある。
 - **その組み合わせを保存する**: `File` → `Save Workspace As...` で`.code-workspace`ファイルとして保存すれば、次回からそのファイルを開くだけで同じフォルダ構成を復元できる。
 
+## 学習履歴の保存先
+
+学習履歴(質問・回答・スコア・苦手タグ)はローカルのSQLite `codelitmus.db` にのみ保存されます。外部には送信されません。
+
+保存先はVS Codeのグローバルストレージです。拡張機能のインストール先はバージョン番号付きのフォルダで、更新のたびに古いフォルダごと削除されるため、そこには置いていません。
+
+| OS | パス |
+|---|---|
+| Windows | `%APPDATA%\Code\User\globalStorage\codelitmus.codelitmus-vscode\codelitmus.db` |
+| macOS | `~/Library/Application Support/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db` |
+| Linux | `~/.config/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db` |
+
+- DBファイルは配布物には含まれておらず、**初回起動時に自動生成**されます(スキーマも自動作成)
+- 拡張機能をアンインストールしてもこのファイルは残ります。履歴ごと消したい場合は手動で削除してください
+- 別マシンに履歴を持っていきたい場合は、このファイルをコピーするだけで移行できます
+- `main.py`を拡張機能を介さず単体で起動した場合のみ、`vscode-extension/codelitmus.db`(リポジトリ内、gitignore済み)が使われます
+
 ## ドキュメント
 
 - [docs/data-contract.md](docs/data-contract.md) — Chunkデータが各境界(Python解析層/FastAPI/拡張ホスト/Webview)でどう変わるかのスキーマ契約

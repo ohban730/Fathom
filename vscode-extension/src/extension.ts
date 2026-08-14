@@ -104,6 +104,14 @@ class BackendServer {
             .get<string>('ollamaModel', '')
             .trim();
 
+        // 学習履歴DBは拡張機能のインストール先ではなくglobalStorageに置く。
+        // インストール先はバージョン番号付きのフォルダで、拡張機能を更新すると
+        // 古いフォルダごと削除されるため、そこに置くと更新のたびに履歴が消える。
+        // globalStorageUriのフォルダはVS Codeが自動作成しないので自分で作る。
+        const storageDir = this.context.globalStorageUri.fsPath;
+        fs.mkdirSync(storageDir, { recursive: true });
+        const dbPath = path.join(storageDir, 'codelitmus.db');
+
         const proc = spawn(
             pythonPath,
             ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(port)],
@@ -112,7 +120,8 @@ class BackendServer {
                 env: {
                     ...process.env,
                     PYTHONIOENCODING: 'utf-8',
-                    CODELITMUS_OLLAMA_MODEL: ollamaModel
+                    CODELITMUS_OLLAMA_MODEL: ollamaModel,
+                    CODELITMUS_DB_PATH: dbPath
                 }
             }
         );
