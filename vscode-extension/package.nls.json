@@ -4,6 +4,7 @@
   "command.startSession.title": "CodeLitmus: Start comprehension check (current file)",
   "command.showRecentFiles.title": "CodeLitmus: Open a recently checked file",
   "configuration.pythonPath.description": "Absolute path to the Python executable used to launch the CodeLitmus backend (main.py) — e.g. the python.exe of a conda env. The backend cannot start while this is unset.",
+  "configuration.ollamaModel.description": "Ollama model used to generate questions and grade answers (e.g. \"qwen2.5-coder:7b\"). Must be a model you have already pulled; run \"ollama list\" to see the names. When empty, the first model Ollama reports is used. If the value does not match any pulled model, CodeLitmus falls back to that first model. Applies when the backend starts, so reload the window after changing it.",
   "configuration.outputLanguage.description": "Language the LLM writes its generated questions, grading feedback, and follow-up project ideas in. Note that the panel UI itself is Japanese only regardless of this setting. Takes effect from the next generated question onward; existing history keeps the language it was created in.",
   "configuration.outputLanguage.ja": "Japanese",
   "configuration.outputLanguage.en": "English"

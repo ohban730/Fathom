@@ -72,6 +72,11 @@
           "default": "",
           "description": "%configuration.pythonPath.description%"
         },
+        "codelitmus.ollamaModel": {
+          "type": "string",
+          "default": "",
+          "description": "%configuration.ollamaModel.description%"
+        },
         "codelitmus.outputLanguage": {
           "type": "string",
           "enum": [

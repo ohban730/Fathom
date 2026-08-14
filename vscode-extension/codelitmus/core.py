@@ -23,6 +23,7 @@ from codelitmus.llm import (
     OllamaClient,
     MockLLMClient,
     DEFAULT_LOCALE,
+    configured_ollama_model,
     build_question_prompt,
     build_evaluation_prompt,
     build_exploration_prompt,
@@ -60,8 +61,9 @@ class CodeLitmusCore:
             # OllamaClient()自体の内部で/api/tagsによる疎通確認を行うため、ここでは
             # 実際にプロンプトを送って生成させない(大きいモデルの初回ロードで
             # 数十秒かかることがあり、起動時のテストとしては重すぎるため)。
+            # 使うモデルは設定 `codelitmus.ollamaModel`(未設定ならpull済み一覧の先頭)。
             try:
-                self.llm = OllamaClient()
+                self.llm = OllamaClient(model=configured_ollama_model() or None)
             except Exception:
                 self.llm = MockLLMClient()
 

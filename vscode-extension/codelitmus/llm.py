@@ -8,8 +8,10 @@ CodeLitmus — LLMクライアント & プロンプト構築モジュール (cod
 - 出力言語(locale)の指定と、苦手カテゴリの安定ID語彙
 """
 import json
+import os
 import requests
 import re
+import sys
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
 from codelitmus.parser import CodeChunk
@@ -147,21 +149,70 @@ def list_ollama_models(base_url: str = "http://localhost:11434") -> List[str]:
     except Exception:
         return []
 
+# VS Codeの設定 `codelitmus.ollamaModel` は、拡張機能がバックエンドを
+# spawnするときにこの環境変数として渡される(src/extension.ts を参照)。
+OLLAMA_MODEL_ENV = "CODELITMUS_OLLAMA_MODEL"
+
+
+def configured_ollama_model() -> str:
+    """設定由来の希望モデル名。未設定なら空文字。"""
+    return os.environ.get(OLLAMA_MODEL_ENV, "").strip()
+
+
+def resolve_ollama_model(preferred: Optional[str], available: List[str]) -> Optional[str]:
+    """設定値(preferred)とpull済み一覧から実際に使うモデル名を決める。
+
+    preferredはVS Codeの設定 `codelitmus.ollamaModel` 由来のユーザー入力なので、
+    タグ違い・打ち間違い・pullし忘れを想定して素直に採用せず段階的に解決する。
+    どれにも当てはまらない場合は一覧の先頭に落とす(設定ミスで採点機能ごと
+    使えなくなるより、動くモデルで動かして選び直してもらうほうがよい)。
+    """
+    if not available:
+        return None
+
+    preferred = (preferred or "").strip()
+    if not preferred:
+        return available[0]
+    if preferred in available:
+        return preferred
+
+    # タグ省略("qwen2.5-coder")でpull済み("qwen2.5-coder:7b")を指したケース
+    for name in available:
+        if name.split(":", 1)[0] == preferred:
+            return name
+
+    return available[0]
+
+
 class OllamaClient(LLMClient):
     """Ollama用の実実装。
 
-    modelを明示しない場合、特定のモデル名（例: "llama3"）をハードコードせず、
-    実際にpull済みのモデルから自動選択する（ユーザーの環境ごとに異なるため）。
+    特定のモデル名（例: "llama3"）をハードコードしない。使うモデルは
+    設定 `codelitmus.ollamaModel`(なければpull済み一覧の先頭)から決まる。
     """
-    def __init__(self, model: Optional[str] = None, base_url: str = "http://localhost:11434"):
+    def __init__(self, model: Optional[str] = None, base_url: str = "http://localhost:11434",
+                 verify_available: bool = True):
         self.base_url = base_url
-        if model:
+        # verify_available=False は、UIのドロップダウンのように
+        # 「一覧から選ばれた=存在が保証された」モデル名を渡す経路用。
+        if model and not verify_available:
             self.model = model
-        else:
-            available = list_ollama_models(base_url)
-            if not available:
-                raise RuntimeError("Ollamaに接続できないか、pull済みのモデルが1つもありません。")
-            self.model = available[0]
+            return
+
+        available = list_ollama_models(base_url)
+        if not available:
+            raise RuntimeError("Ollamaに接続できないか、pull済みのモデルが1つもありません。")
+        resolved = resolve_ollama_model(model, available)
+        if model and resolved != model:
+            if resolved.split(":", 1)[0] == model.strip():
+                reason = f"指定モデル '{model}' のタグを補完して '{resolved}' を使用します。"
+            else:
+                reason = (
+                    f"指定モデル '{model}' はpull済み一覧にないため '{resolved}' を使用します。"
+                    " (`ollama list` で名前を確認してください)"
+                )
+            print(f"[CodeLitmus] {reason} available={available}", file=sys.stderr)
+        self.model = resolved
 
     def ask(self, prompt: str) -> str:
         try:

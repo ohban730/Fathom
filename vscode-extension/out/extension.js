@@ -89,9 +89,20 @@ class BackendServer {
         }
         const port = await findFreePort();
         const backendDir = this.context.extensionPath;
+        // 使用するOllamaモデルは設定で固定できる。バックエンドはVS Code APIを
+        // 参照できないため、環境変数として渡す(codelitmus/llm.py の
+        // OLLAMA_MODEL_ENV と対応)。空文字なら未指定=pull済み一覧の先頭が使われる。
+        const ollamaModel = vscode.workspace
+            .getConfiguration('codelitmus')
+            .get('ollamaModel', '')
+            .trim();
         const proc = (0, child_process_1.spawn)(pythonPath, ['-m', 'uvicorn', 'main:app', '--host', '127.0.0.1', '--port', String(port)], {
             cwd: backendDir,
-            env: { ...process.env, PYTHONIOENCODING: 'utf-8' }
+            env: {
+                ...process.env,
+                PYTHONIOENCODING: 'utf-8',
+                CODELITMUS_OLLAMA_MODEL: ollamaModel
+            }
         });
         this.process = proc;
         let stderrTail = '';

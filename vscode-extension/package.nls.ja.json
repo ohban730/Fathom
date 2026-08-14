@@ -4,6 +4,7 @@
   "command.startSession.title": "CodeLitmus: 理解度テストを開始 (現在のファイル)",
   "command.showRecentFiles.title": "CodeLitmus: 最近テストしたファイルを開く",
   "configuration.pythonPath.description": "CodeLitmusバックエンド(main.py)を起動するPython実行体の絶対パス(例: condaのcodelitmus環境のpython.exe)。未設定の場合はバックエンドを起動できません。",
+  "configuration.ollamaModel.description": "質問生成と採点に使うOllamaモデル名(例: \"qwen2.5-coder:7b\")。`ollama pull`済みのモデル名を指定してください(`ollama list`で確認できます)。空の場合はOllamaが返す一覧の先頭のモデルを使います。pull済みでない名前を指定した場合も一覧の先頭にフォールバックします。バックエンド起動時に反映されるため、変更後はウィンドウの再読み込みが必要です。",
   "configuration.outputLanguage.description": "LLMが生成する質問文・採点フィードバック・自由課題の出力言語。パネル内のUI文言はこの設定に関係なく日本語固定です。次に生成する質問から反映され、生成済みの履歴は作成時の言語のまま残ります。",
   "configuration.outputLanguage.ja": "日本語",
   "configuration.outputLanguage.en": "英語"
