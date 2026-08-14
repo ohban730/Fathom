@@ -20,6 +20,22 @@
     "Education",
     "Other"
   ],
+  "keywords": [
+    "python",
+    "code comprehension",
+    "code reading",
+    "code review",
+    "learning",
+    "education",
+    "quiz",
+    "active recall",
+    "ollama",
+    "local llm",
+    "llm",
+    "ai",
+    "vibe coding",
+    "japanese"
+  ],
   "activationEvents": [
     "onCommand:codelitmus.startSession",
     "onCommand:codelitmus.showRecentFiles",

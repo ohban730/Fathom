@@ -6,6 +6,10 @@
 
 リトマス試験紙のように、「このコードを自分は本当に理解できているか」を判定します。
 
+![CodeLitmusのパネル画面 — 学習の星図(コンステレーションマップ)、Mermaid構造フローチャート、Chunk単位の質問と再回答ガイド](https://raw.githubusercontent.com/ohban730/CodeLitmus/main/docs/screenshots/constellation-map.png)
+
+下部Panel領域(TERMINAL等と同じ場所)に表示される「CODELITMUS」タブ。関数/クラス単位のChunkが星として配置され、質問への回答・厳格採点・再回答ガイドまでの一連の流れがここで進みます。
+
 ## できること
 
 - 開いているPythonファイルをAST解析し、関数/クラス/エントリーポイント単位の**Chunk**に分割
