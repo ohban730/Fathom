@@ -223,7 +223,7 @@
 
   <div id="mock-mode-banner" class="hidden mb-4 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
     <span>⚠️</span>
-    <span>Mockエンジン動作中: 採点・質問はデモ用の固定フィードバックで、コード内容は実際には評価されていません。Ollamaが起動しモデルがpull済みか確認してください。</span>
+    <span>Mockエンジン動作中: 採点・質問はデモ用の固定フィードバックで、コード内容は実際には評価されていません。Ollamaを起動して<code class="px-1 rounded bg-amber-500/20">ollama pull</code>すると、数秒後にヘッダーにモデル選択が現れます。選ぶと実LLMに切り替わります。</span>
   </div>
 
   <!-- ──────────────────────────────────────────
@@ -1219,6 +1219,15 @@
       hideSelectionPromptPopup();
     });
 
+    // Mockで動いている間だけ、定期的にヘルスチェックをやり直す。
+    // checkHealthはbackendReadyを受け取ったときの1回しか走らず、パネルは
+    // retainContextWhenHidden:true でタブを切り替えても再読み込みされない。
+    // そのため、パネルを開いた後にollama pullが完了しても、この再確認が無いと
+    // ウィンドウを再読み込みするまでモデルの存在に気づけない。
+    // 実LLMに切り替わったら止めるので、常時ポーリングにはならない。
+    let mockRecheckTimer = null;
+    const MOCK_RECHECK_INTERVAL_MS = 10000;
+
     async function checkHealth() {
       const badge = document.getElementById('engine-badge');
       const banner = document.getElementById('mock-mode-banner');
@@ -1232,6 +1241,15 @@
         badge.classList.toggle('text-indigo-300', !isMock);
         badge.classList.toggle('text-amber-300', isMock);
         banner.classList.toggle('hidden', !isMock);
+
+        if (isMock) {
+          if (!mockRecheckTimer) {
+            mockRecheckTimer = setInterval(checkHealth, MOCK_RECHECK_INTERVAL_MS);
+          }
+        } else if (mockRecheckTimer) {
+          clearInterval(mockRecheckTimer);
+          mockRecheckTimer = null;
+        }
 
         // Mockのときも一覧を引く。Ollamaを後から入れた/起動した場合、ここで
         // ドロップダウンが出れば選ぶだけで実LLMへ復帰できる(バックエンドの
