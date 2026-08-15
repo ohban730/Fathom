@@ -12,7 +12,7 @@
     ページ読み込みごとに実際の値へ差し替える。
   -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; font-src ${cspSource}; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://127.0.0.1:*;">
-  <title>CodeLitmus — Code Understanding Agent</title>
+  <title>Fathom — Code Understanding Agent</title>
 
   <!--
     Tailwind CSS — 以前は cdn.tailwindcss.com のJIT版を読み込んでいたが、
@@ -180,7 +180,7 @@
         ✨
       </div>
       <div>
-        <h1 class="text-lg font-bold font-display text-brand-text tracking-wide">CodeLitmus</h1>
+        <h1 class="text-lg font-bold font-display text-brand-text tracking-wide">Fathom</h1>
         <p class="text-xs text-brand-muted">理解の星図 — Active Recall Constellation</p>
       </div>
     </div>
@@ -501,7 +501,7 @@
       lastEvalForChunk: null,
       projectAnalytics: null,
       // LLMが生成する文章(質問・フィードバック・自由課題)の出力言語。
-      // 設定 codelitmus.outputLanguage の値を拡張ホストから受け取る。
+      // 設定 fathom.outputLanguage の値を拡張ホストから受け取る。
       // このパネルのUI文言自体は日本語固定で、切り替わるのはLLMの出力だけ。
       locale: "ja",
       chunkResults: {}, // chunkIdx -> { passed: bool, score: number }
@@ -551,7 +551,7 @@
       });
       document.getElementById('btn-idle-select-file').addEventListener('click', () => {
         if (vscode) {
-          // 拡張ホスト側の codelitmus.startSession は、アクティブエディタが無ければ
+          // 拡張ホスト側の fathom.startSession は、アクティブエディタが無ければ
           // ファイル選択ダイアログを開く。案内ビューからの導線をそこに合流させる。
           vscode.postMessage({ command: 'requestStartSession' });
         } else {
@@ -1126,7 +1126,7 @@
     }
 
     // ── コード部分選択 → クラウドLLM向け質問プロンプト ──
-    // ライブラリ・API固有の使い方(例: tokenizerの引数の意味など)はCodeLitmusの理解度評価スコープ外のため、
+    // ライブラリ・API固有の使い方(例: tokenizerの引数の意味など)はFathomの理解度評価スコープ外のため、
     // ユーザーがコード内の任意区間を選択したら、その区間についてChatGPT/Claude等に投げられる
     // 質問文を組み立てる。文面と「知りたい観点」チップはbuildLLMPrompt()/PROMPT_VIEWPOINTSと同じものを使い、
     // 対象コードだけを選択範囲に差し替えることでアクティブラーニングの流れを一貫させる。

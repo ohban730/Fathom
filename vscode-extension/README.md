@@ -1,4 +1,4 @@
-# CodeLitmus
+# Fathom
 
 > **⚠️ Language: Japanese only.** The panel UI, the generated questions, and the grading feedback are all in Japanese. Command names and settings are localized, but everything inside the tool is not. English support is not implemented yet — please treat this as a Japanese-language tool for now.
 
@@ -6,9 +6,9 @@
 
 リトマス試験紙のように、「このコードを自分は本当に理解できているか」を判定します。
 
-![CodeLitmusのパネル画面 — 学習の星図(コンステレーションマップ)、Mermaid構造フローチャート、Chunk単位の質問と再回答ガイド](https://raw.githubusercontent.com/ohban730/CodeLitmus/main/docs/screenshots/constellation-map.png)
+![Fathomのパネル画面 — 学習の星図(コンステレーションマップ)、Mermaid構造フローチャート、Chunk単位の質問と再回答ガイド](https://raw.githubusercontent.com/ohban730/Fathom/main/docs/screenshots/constellation-map.png)
 
-下部Panel領域(TERMINAL等と同じ場所)に表示される「CODELITMUS」タブ。関数/クラス単位のChunkが星として配置され、質問への回答・厳格採点・再回答ガイドまでの一連の流れがここで進みます。
+下部Panel領域(TERMINAL等と同じ場所)に表示される「FATHOM」タブ。関数/クラス単位のChunkが星として配置され、質問への回答・厳格採点・再回答ガイドまでの一連の流れがここで進みます。
 
 ## できること
 
@@ -44,7 +44,7 @@ VS Codeの`settings.json`に、手順1の環境の`python`実行体を指定し�
 
 ```json
 {
-  "codelitmus.pythonPath": "C:\\Users\\<you>\\miniconda3\\envs\\codelitmus\\python.exe"
+  "fathom.pythonPath": "C:\\Users\\<you>\\miniconda3\\envs\\fathom\\python.exe"
 }
 ```
 
@@ -87,7 +87,7 @@ Pythonファイルを開いた状態で `Ctrl+Alt+D`（Macは`Cmd+Alt+D`）。�
 
 ```json
 {
-  "codelitmus.ollamaModel": "qwen2.5-coder:7b"
+  "fathom.ollamaModel": "qwen2.5-coder:7b"
 }
 ```
 
@@ -101,18 +101,18 @@ Pythonファイルを開いた状態で `Ctrl+Alt+D`（Macは`Cmd+Alt+D`）。�
 
 ## ソースから動かす場合
 
-コードを読んだり改造したりしたい場合は、リポジトリをクローンして`vscode-extension/`をVS Codeで開き、`npm install && npm run build` の後に`F5`(Run Extension)でデバッグ実行できます。詳細は[リポジトリのREADME](https://github.com/ohban730/CodeLitmus)を参照してください。
+コードを読んだり改造したりしたい場合は、リポジトリをクローンして`vscode-extension/`をVS Codeで開き、`npm install && npm run build` の後に`F5`(Run Extension)でデバッグ実行できます。詳細は[リポジトリのREADME](https://github.com/ohban730/Fathom)を参照してください。
 
 ## プライバシー
 
-CodeLitmusはネットワーク的にローカル完結です。コードや回答が外部サーバーへ送られることはありません。
+Fathomはネットワーク的にローカル完結です。コードや回答が外部サーバーへ送られることはありません。
 
 - 通信先は拡張機能が起動するローカルバックエンド(`http://127.0.0.1:<動的ポート>`)と、任意で使うOllama(`localhost:11434`)のみ
 - WebviewにはCSP(`default-src 'none'`)を設定し、外部CDN・外部フォントへのアクセスを実行時に遮断しています
-- 学習履歴はローカルのSQLite(`codelitmus.db`)にのみ保存されます。保存先はVS Codeのグローバルストレージで、拡張機能を更新しても消えません
-  - Windows: `%APPDATA%\Code\User\globalStorage\codelitmus.codelitmus-vscode\codelitmus.db`
-  - macOS: `~/Library/Application Support/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db`
-  - Linux: `~/.config/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db`
+- 学習履歴はローカルのSQLite(`fathom.db`)にのみ保存されます。保存先はVS Codeのグローバルストレージで、拡張機能を更新しても消えません
+  - Windows: `%APPDATA%\Code\User\globalStorage\fathom.fathom-vscode\fathom.db`
+  - macOS: `~/Library/Application Support/Code/User/globalStorage/fathom.fathom-vscode/fathom.db`
+  - Linux: `~/.config/Code/User/globalStorage/fathom.fathom-vscode/fathom.db`
   - DBは初回起動時に自動生成されます。アンインストールしてもこのファイルは残るため、履歴も消したい場合は手動で削除してください
 
 唯一の例外は、苦手タグの「🌐 検索」リンクです。これはクリックしたときだけ既定のブラウザでGoogle検索を開きます。

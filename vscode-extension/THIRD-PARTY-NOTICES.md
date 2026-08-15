@@ -1,6 +1,6 @@
 # サードパーティ ライセンス表記
 
-CodeLitmus本体は MIT License（[LICENSE](LICENSE)）で配布されます。
+Fathom本体は MIT License（[LICENSE](LICENSE)）で配布されます。
 本ファイルは、配布物に含まれる／実行時に利用する第三者ソフトウェアの著作権表示とライセンスをまとめたものです。
 
 **GPL / LGPL / AGPL 系のコンポーネントは一切含まれていません。**
@@ -58,11 +58,11 @@ OFL 1.1はフォントファイルを再配布する際、ライセンス全文�
 | PSF-2.0 | typing-extensions |
 | **MPL-2.0** | **certifi** |
 
-`certifi`のMPL-2.0はファイル単位の弱いコピーレフトです。certifi自身のソースを改変して配布する場合のみ、その改変ファイルの公開義務が生じます。改変せずに利用する分にはCodeLitmus側のライセンスに影響しません。
+`certifi`のMPL-2.0はファイル単位の弱いコピーレフトです。certifi自身のソースを改変して配布する場合のみ、その改変ファイルの公開義務が生じます。改変せずに利用する分にはFathom側のライセンスに影響しません。
 
 ## 4. Ollama および LLMモデルについて
 
-CodeLitmusは`http://localhost:11434`のOllamaに対してHTTPリクエストを送るだけで、Ollama本体もモデルも同梱していません。
+Fathomは`http://localhost:11434`のOllamaに対してHTTPリクエストを送るだけで、Ollama本体もモデルも同梱していません。
 
 - Ollama本体はMITライセンスで、商用利用を含めライセンス料は発生しません
 - **どのモデルをpullして使うかはユーザーの責任です。** モデルごとにライセンスは異なります（例: Llama系はMeta独自のLlama License、Mistral系やQwen系はApache-2.0が多い、GemmaはGoogle独自の利用規約）。利用前に各モデルのライセンスをご確認ください

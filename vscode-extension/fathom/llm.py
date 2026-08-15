@@ -1,5 +1,5 @@
 """
-CodeLitmus — LLMクライアント & プロンプト構築モジュール (codelitmus/llm.py)
+Fathom — LLMクライアント & プロンプト構築モジュール (fathom/llm.py)
 
 - LLMClient 抽象層 (OllamaClient / MockLLMClient)
 - コードに応じた「動的評価項目（ルーブリック）」の生成
@@ -14,7 +14,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
-from codelitmus.parser import CodeChunk
+from fathom.parser import CodeChunk
 
 # ---------------------------------------------------------------------------
 # 出力言語(locale)
@@ -149,9 +149,9 @@ def list_ollama_models(base_url: str = "http://localhost:11434") -> List[str]:
     except Exception:
         return []
 
-# VS Codeの設定 `codelitmus.ollamaModel` は、拡張機能がバックエンドを
+# VS Codeの設定 `fathom.ollamaModel` は、拡張機能がバックエンドを
 # spawnするときにこの環境変数として渡される(src/extension.ts を参照)。
-OLLAMA_MODEL_ENV = "CODELITMUS_OLLAMA_MODEL"
+OLLAMA_MODEL_ENV = "FATHOM_OLLAMA_MODEL"
 
 
 def configured_ollama_model() -> str:
@@ -162,7 +162,7 @@ def configured_ollama_model() -> str:
 def resolve_ollama_model(preferred: Optional[str], available: List[str]) -> Optional[str]:
     """設定値(preferred)とpull済み一覧から実際に使うモデル名を決める。
 
-    preferredはVS Codeの設定 `codelitmus.ollamaModel` 由来のユーザー入力なので、
+    preferredはVS Codeの設定 `fathom.ollamaModel` 由来のユーザー入力なので、
     タグ違い・打ち間違い・pullし忘れを想定して素直に採用せず段階的に解決する。
     どれにも当てはまらない場合は一覧の先頭に落とす(設定ミスで採点機能ごと
     使えなくなるより、動くモデルで動かして選び直してもらうほうがよい)。
@@ -188,7 +188,7 @@ class OllamaClient(LLMClient):
     """Ollama用の実実装。
 
     特定のモデル名（例: "llama3"）をハードコードしない。使うモデルは
-    設定 `codelitmus.ollamaModel`(なければpull済み一覧の先頭)から決まる。
+    設定 `fathom.ollamaModel`(なければpull済み一覧の先頭)から決まる。
     """
     def __init__(self, model: Optional[str] = None, base_url: str = "http://localhost:11434",
                  verify_available: bool = True):
@@ -211,7 +211,7 @@ class OllamaClient(LLMClient):
                     f"指定モデル '{model}' はpull済み一覧にないため '{resolved}' を使用します。"
                     " (`ollama list` で名前を確認してください)"
                 )
-            print(f"[CodeLitmus] {reason} available={available}", file=sys.stderr)
+            print(f"[Fathom] {reason} available={available}", file=sys.stderr)
         self.model = resolved
 
     def ask(self, prompt: str) -> str:

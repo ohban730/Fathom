@@ -1,12 +1,12 @@
-# CodeLitmus
+# Fathom
 
 バイブコーディングによって発生する「理解負債」を、能動学習(質問→回答→採点→フィードバック)によって解消するVS Code拡張機能。
 
 現在は開発者本人が使う前提のツールです。使いたい人は以下の手順で自分でセットアップしてください(Python/LLM周りの自動インストールは行っていません)。
 
-![CodeLitmusのVS Code拡張機能画面 — 学習の星図(コンステレーションマップ)、Mermaid構造フローチャート、Chunk単位の質問と再回答ガイドを表示](docs/screenshots/constellation-map.png)
+![FathomのVS Code拡張機能画面 — 学習の星図(コンステレーションマップ)、Mermaid構造フローチャート、Chunk単位の質問と再回答ガイドを表示](docs/screenshots/constellation-map.png)
 
-下部Panel領域(TERMINAL等と同じ場所)に表示される「CODELITMUS」タブ。関数/クラス単位のChunkが星として配置され、質問への回答・厳格採点・再回答ガイドまでの一連の流れがここで進みます。
+下部Panel領域(TERMINAL等と同じ場所)に表示される「FATHOM」タブ。関数/クラス単位のChunkが星として配置され、質問への回答・厳格採点・再回答ガイドまでの一連の流れがここで進みます。
 
 ## 前提
 
@@ -23,8 +23,8 @@
 ### 【共通1】 Python環境の準備
 
 ```bash
-conda create -n codelitmus python=3.11
-conda activate codelitmus
+conda create -n fathom python=3.11
+conda activate fathom
 pip install -r vscode-extension/requirements.txt
 ```
 
@@ -47,11 +47,11 @@ condaを使わない場合も、`vscode-extension/requirements.txt`(fastapi / uv
 
 ```json
 {
-  "codelitmus.pythonPath": "C:\\Users\\<you>\\miniconda3\\envs\\codelitmus\\python.exe"
+  "fathom.pythonPath": "C:\\Users\\<you>\\miniconda3\\envs\\fathom\\python.exe"
 }
 ```
 
-未設定のままだと、パネルを開いた時点で「設定`codelitmus.pythonPath`にPython実行体の絶対パスを指定してください」というエラーが出ます。**セットアップでつまずくポイントはほぼここです。**
+未設定のままだと、パネルを開いた時点で「設定`fathom.pythonPath`にPython実行体の絶対パスを指定してください」というエラーが出ます。**セットアップでつまずくポイントはほぼここです。**
 
 条件は「**その実行体で`fastapi` / `uvicorn` / `pydantic` / `requests`がimportできること**」だけです。拡張機能はこの実行体を直接起動する(`<python.exe> -m uvicorn main:app ...`)ため、condaである必要も、事前に`conda activate`しておく必要も、PATHを通しておく必要もありません。venvの`.venv\Scripts\python.exe`やシステムPythonでも構いません。
 
@@ -62,8 +62,8 @@ condaを使わない場合も、`vscode-extension/requirements.txt`(fastapi / uv
 コードを読んだり改造したりしたい人向け。VS Codeの拡張機能開発ホスト(Extension Development Host)で動かします。
 
 ```bash
-git clone https://github.com/ohban730/CodeLitmus.git
-cd CodeLitmus/vscode-extension
+git clone https://github.com/ohban730/Fathom.git
+cd Fathom/vscode-extension
 npm install
 npm run build
 ```
@@ -74,7 +74,7 @@ npm run build
 2. `F5`(Run Extension)を押す → 新しいVS Codeウィンドウ(拡張機能開発ホスト)が立ち上がる
 3. **その新しいウィンドウのほうで** Pythonファイルを開き、`Ctrl+Alt+D`
 
-`settings.json`の`codelitmus.pythonPath`は、拡張機能開発ホスト側にも引き継がれるユーザー設定に書いておくのが確実です。
+`settings.json`の`fathom.pythonPath`は、拡張機能開発ホスト側にも引き継がれるユーザー設定に書いておくのが確実です。
 
 ### パターンB: 拡張機能としてインストールして使う(利用者向け)
 
@@ -87,21 +87,21 @@ VS Code拡張機能は**ビルド済みのJavaScript(`out/extension.js`)を同�
 Marketplaceに公開済みであれば、**これが標準の手順**です。ブラウザやコマンドは不要です。
 
 1. VS Codeの左側のアクティビティバーから**拡張機能ビュー**(`Ctrl+Shift+X`)を開く
-2. 「CodeLitmus」を検索
+2. 「Fathom」を検索
 3. **「インストール」ボタンを押す** — これだけで完了
 
 #### B-2. `.vsix`ファイルからインストールする(Marketplace未公開時・手動配布時)
 
 ```bash
-code --install-extension codelitmus-vscode-<version>.vsix
+code --install-extension fathom-vscode-<version>.vsix
 ```
 
-- `.vsix`ファイルは[Releases](https://github.com/ohban730/CodeLitmus/releases)から取得するか、自分でクローンして `npx @vscode/vsce package` で作成します(Marketplaceへの`publish`にはPATが別途必要)
+- `.vsix`ファイルは[Releases](https://github.com/ohban730/Fathom/releases)から取得するか、自分でクローンして `npx @vscode/vsce package` で作成します(Marketplaceへの`publish`にはPATが別途必要)
 - コマンドを使わず、VS Codeの拡張機能ビュー → 右上「…」→ **「VSIXからのインストール…」** からファイルを選んでも同じです
 
 #### インストール後にやること
 
-**どちらの方法でも、Pythonの依存パッケージだけは自動では入りません。** 【共通1〜3】(pip install / `codelitmus.pythonPath`設定)を済ませてください。バックエンド本体(`main.py` / `codelitmus/` / `requirements.txt`)は拡張機能に同梱されているので、別途ダウンロードする必要はありません。
+**どちらの方法でも、Pythonの依存パッケージだけは自動では入りません。** 【共通1〜3】(pip install / `fathom.pythonPath`設定)を済ませてください。バックエンド本体(`main.py` / `fathom/` / `requirements.txt`)は拡張機能に同梱されているので、別途ダウンロードする必要はありません。
 
 同梱された`requirements.txt`は`~/.vscode/extensions/`配下にあって分かりにくいので、パッケージ名を直接指定しても構いません。
 
@@ -113,13 +113,13 @@ pip install fastapi "uvicorn[standard]" pydantic requests
 
 ## 使い方
 
-- Pythonファイルを開いた状態で `Ctrl+Alt+D`(Macは`Cmd+Alt+D`)、またはコマンドパレットから「CodeLitmus: 理解度テストを開始」を実行
-- 画面下部のPanel領域(TERMINAL等と同じ場所)に「CodeLitmus」タブが表示され、AST解析されたChunk(関数/クラス/エントリーポイント)ごとに質問→回答→採点が進みます
+- Pythonファイルを開いた状態で `Ctrl+Alt+D`(Macは`Cmd+Alt+D`)、またはコマンドパレットから「Fathom: 理解度テストを開始」を実行
+- 画面下部のPanel領域(TERMINAL等と同じ場所)に「Fathom」タブが表示され、AST解析されたChunk(関数/クラス/エントリーポイント)ごとに質問→回答→採点が進みます
 - エディタで何もファイルを開いていない状態で`Ctrl+Alt+D`を押すと、ファイル選択ダイアログが開きます
 
 ### 過去にテストしたファイルに戻る(🕒)
 
-パネル右上の**🕒**、またはコマンドパレットの「CodeLitmus: 最近テストしたファイルを開く」で、**過去にテストしたファイルの一覧**(最後にテストした日時の新しい順、最大15件)が出ます。選ぶとそのファイルがエディタで開きます。
+パネル右上の**🕒**、またはコマンドパレットの「Fathom: 最近テストしたファイルを開く」で、**過去にテストしたファイルの一覧**(最後にテストした日時の新しい順、最大15件)が出ます。選ぶとそのファイルがエディタで開きます。
 
 - 履歴は絶対パスで記録されているため、**今のワークスペースの外にあるファイルもそのまま開けます**。フォルダを移動して回る必要はありません
 - **ファイルが開くところまでが🕒の役割です。** 続けて`Ctrl+Alt+D`を押すとテストが始まります
@@ -141,11 +141,11 @@ pip install fastapi "uvicorn[standard]" pydantic requests
 
 ### 設定で既定モデルを固定する(推奨)
 
-`settings.json`に`codelitmus.ollamaModel`を書くと、毎回そのモデルで起動します。
+`settings.json`に`fathom.ollamaModel`を書くと、毎回そのモデルで起動します。
 
 ```json
 {
-  "codelitmus.ollamaModel": "qwen2.5-coder:7b"
+  "fathom.ollamaModel": "qwen2.5-coder:7b"
 }
 ```
 
@@ -159,7 +159,7 @@ pip install fastapi "uvicorn[standard]" pydantic requests
 
 パネル右上の「Engine:」バッジの隣に、**pull済みモデル一覧のドロップダウン**が表示されます。ここで選び直すと、以降の質問生成・採点にそのモデルが使われます。
 
-- こちらは**その場限りの切り替え**です。VS Codeを閉じると`codelitmus.ollamaModel`の値(未設定なら一覧の先頭)に戻ります
+- こちらは**その場限りの切り替え**です。VS Codeを閉じると`fathom.ollamaModel`の値(未設定なら一覧の先頭)に戻ります
 - Ollamaが未起動、またはpull済みモデルが1つもない場合はドロップダウンは表示されず、`Engine: Mock` になります
 - Ollamaを後から起動した場合も、ドロップダウンでモデルを選べば実LLMに切り替わります
 
@@ -167,28 +167,28 @@ pip install fastapi "uvicorn[standard]" pydantic requests
 
 ## 別フォルダ・複数フォルダのファイルを対象にする
 
-CodeLitmusはファイルの絶対パスだけで動くため、今開いているワークスペースの外にあるファイルでも制限なく理解度テストできます(パネル右上の「?」アイコンにも同じ内容を表示しています)。
+Fathomはファイルの絶対パスだけで動くため、今開いているワークスペースの外にあるファイルでも制限なく理解度テストできます(パネル右上の「?」アイコンにも同じ内容を表示しています)。
 
 - **1ファイルだけ試す**: `Ctrl+O`で目的のファイルを直接開く。または、エディタで何も開いていない状態で`Ctrl+Alt+D`を押すとファイル選択ダイアログが開き、どこにあるファイルでも選べる。
-- **複数フォルダを並べて操作する**: コマンドパレット(`Ctrl+Shift+P`)→ `Workspaces: Add Folder to Workspace...` で、今のリポジトリと無関係な任意のフォルダを追加する。Explorerに複数のフォルダツリーが並び、どちらのファイルをアクティブにしてもCodeLitmusは同じ挙動で追従する。共通の親フォルダを1つ開くだけでも同様の効果がある。
+- **複数フォルダを並べて操作する**: コマンドパレット(`Ctrl+Shift+P`)→ `Workspaces: Add Folder to Workspace...` で、今のリポジトリと無関係な任意のフォルダを追加する。Explorerに複数のフォルダツリーが並び、どちらのファイルをアクティブにしてもFathomは同じ挙動で追従する。共通の親フォルダを1つ開くだけでも同様の効果がある。
 - **その組み合わせを保存する**: `File` → `Save Workspace As...` で`.code-workspace`ファイルとして保存すれば、次回からそのファイルを開くだけで同じフォルダ構成を復元できる。
 
 ## 学習履歴の保存先
 
-学習履歴(質問・回答・スコア・苦手タグ)はローカルのSQLite `codelitmus.db` にのみ保存されます。外部には送信されません。
+学習履歴(質問・回答・スコア・苦手タグ)はローカルのSQLite `fathom.db` にのみ保存されます。外部には送信されません。
 
 保存先はVS Codeのグローバルストレージです。拡張機能のインストール先はバージョン番号付きのフォルダで、更新のたびに古いフォルダごと削除されるため、そこには置いていません。
 
 | OS | パス |
 |---|---|
-| Windows | `%APPDATA%\Code\User\globalStorage\codelitmus.codelitmus-vscode\codelitmus.db` |
-| macOS | `~/Library/Application Support/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db` |
-| Linux | `~/.config/Code/User/globalStorage/codelitmus.codelitmus-vscode/codelitmus.db` |
+| Windows | `%APPDATA%\Code\User\globalStorage\fathom.fathom-vscode\fathom.db` |
+| macOS | `~/Library/Application Support/Code/User/globalStorage/fathom.fathom-vscode/fathom.db` |
+| Linux | `~/.config/Code/User/globalStorage/fathom.fathom-vscode/fathom.db` |
 
 - DBファイルは配布物には含まれておらず、**初回起動時に自動生成**されます(スキーマも自動作成)
 - 拡張機能をアンインストールしてもこのファイルは残ります。履歴ごと消したい場合は手動で削除してください
 - 別マシンに履歴を持っていきたい場合は、このファイルをコピーするだけで移行できます
-- `main.py`を拡張機能を介さず単体で起動した場合のみ、`vscode-extension/codelitmus.db`(リポジトリ内、gitignore済み)が使われます
+- `main.py`を拡張機能を介さず単体で起動した場合のみ、`vscode-extension/fathom.db`(リポジトリ内、gitignore済み)が使われます
 
 ## ドキュメント
 
@@ -200,17 +200,17 @@ CodeLitmusはファイルの絶対パスだけで動くため、今開いてい�
 
 - バックエンドはローカルのPython実行体が前提です。Pythonランタイム自体を同梱した配布は行っていません(自分専用+セットアップ手順公開という方針のため)。
 - Ollama未セットアップ時はMockエンジンにフォールバックし、コード内容に応じた厳格な採点にはなりません。
-- パネルのドロップダウンでのモデル切り替えは、そのバックエンドプロセスが生きている間だけ有効です。恒久的に決めたい場合は`codelitmus.ollamaModel`設定を使ってください。
+- パネルのドロップダウンでのモデル切り替えは、そのバックエンドプロセスが生きている間だけ有効です。恒久的に決めたい場合は`fathom.ollamaModel`設定を使ってください。
 
 ## 対応言語 / Language
 
 **日本語のみです。UI and generated questions are currently Japanese only.**
 
-コマンド名と設定項目の説明のみ`vscode-extension/package.nls.json`（既定=英語）/ `package.nls.ja.json`（日本語）で多言語化しています。パネル内のUI・生成される質問・採点フィードバックは日本語固定です。[`codelitmus/llm.py`](vscode-extension/codelitmus/llm.py)のプロンプト自体が日本語で書かれているため、LLMの出力も日本語で返ります。
+コマンド名と設定項目の説明のみ`vscode-extension/package.nls.json`（既定=英語）/ `package.nls.ja.json`（日本語）で多言語化しています。パネル内のUI・生成される質問・採点フィードバックは日本語固定です。[`fathom/llm.py`](vscode-extension/fathom/llm.py)のプロンプト自体が日本語で書かれているため、LLMの出力も日本語で返ります。
 
 ## ライセンス
 
-CodeLitmus本体は [MIT License](LICENSE) です。
+Fathom本体は [MIT License](LICENSE) です。
 
 同梱している第三者ソフトウェア(Tailwind CSS / Mermaid / Space Grotesk)と、バックエンドが利用するPythonパッケージのライセンス表記は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にまとめています。GPL/LGPL/AGPL系のコンポーネントは含まれていません。
 

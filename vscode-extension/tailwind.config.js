@@ -1,5 +1,5 @@
 /**
- * CodeLitmus — Tailwind CSS ビルド設定
+ * Fathom — Tailwind CSS ビルド設定
  *
  * 以前は `cdn.tailwindcss.com` をWebviewから直接読み込み、この設定を index.html 内の
  * インライン `tailwind.config = {...}` で指定していた。NFR-04(ローカル通信のみ)に反する

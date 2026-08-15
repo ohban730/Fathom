@@ -16,7 +16,7 @@ function createNonce(): string {
 // あえて追従させず、明示的な設定でのみ切り替える。表示言語に自動追従させると、
 // 英語UIでVS Codeを使っている日本語話者の出題が突然英語になってしまうため。
 function getOutputLocale(): string {
-    return vscode.workspace.getConfiguration('codelitmus').get<string>('outputLanguage', 'ja');
+    return vscode.workspace.getConfiguration('fathom').get<string>('outputLanguage', 'ja');
 }
 
 function findFreePort(): Promise<number> {
@@ -85,10 +85,10 @@ class BackendServer {
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     async start(): Promise<string | undefined> {
-        const pythonPath = vscode.workspace.getConfiguration('codelitmus').get<string>('pythonPath', '');
+        const pythonPath = vscode.workspace.getConfiguration('fathom').get<string>('pythonPath', '');
         if (!pythonPath) {
             vscode.window.showErrorMessage(
-                'CodeLitmus: バックエンドを起動できません。設定「codelitmus.pythonPath」にPython実行体の絶対パスを指定してください(セットアップ手順を参照)。'
+                'Fathom: バックエンドを起動できません。設定「fathom.pythonPath」にPython実行体の絶対パスを指定してください(セットアップ手順を参照)。'
             );
             return undefined;
         }
@@ -97,10 +97,10 @@ class BackendServer {
         const backendDir = this.context.extensionPath;
 
         // 使用するOllamaモデルは設定で固定できる。バックエンドはVS Code APIを
-        // 参照できないため、環境変数として渡す(codelitmus/llm.py の
+        // 参照できないため、環境変数として渡す(fathom/llm.py の
         // OLLAMA_MODEL_ENV と対応)。空文字なら未指定=pull済み一覧の先頭が使われる。
         const ollamaModel = vscode.workspace
-            .getConfiguration('codelitmus')
+            .getConfiguration('fathom')
             .get<string>('ollamaModel', '')
             .trim();
 
@@ -110,7 +110,7 @@ class BackendServer {
         // globalStorageUriのフォルダはVS Codeが自動作成しないので自分で作る。
         const storageDir = this.context.globalStorageUri.fsPath;
         fs.mkdirSync(storageDir, { recursive: true });
-        const dbPath = path.join(storageDir, 'codelitmus.db');
+        const dbPath = path.join(storageDir, 'fathom.db');
 
         const proc = spawn(
             pythonPath,
@@ -120,8 +120,8 @@ class BackendServer {
                 env: {
                     ...process.env,
                     PYTHONIOENCODING: 'utf-8',
-                    CODELITMUS_OLLAMA_MODEL: ollamaModel,
-                    CODELITMUS_DB_PATH: dbPath
+                    FATHOM_OLLAMA_MODEL: ollamaModel,
+                    FATHOM_DB_PATH: dbPath
                 }
             }
         );
@@ -132,19 +132,19 @@ class BackendServer {
             stderrTail = (stderrTail + chunk.toString()).slice(-2000);
         });
         proc.on('error', (err) => {
-            vscode.window.showErrorMessage(`CodeLitmus: バックエンドの起動に失敗しました(${pythonPath}): ${err.message}`);
+            vscode.window.showErrorMessage(`Fathom: バックエンドの起動に失敗しました(${pythonPath}): ${err.message}`);
         });
         proc.on('exit', (code) => {
             this.apiBase = undefined;
             if (code !== null && code !== 0) {
-                vscode.window.showErrorMessage(`CodeLitmus: バックエンドが異常終了しました(code ${code})。\n${stderrTail}`);
+                vscode.window.showErrorMessage(`Fathom: バックエンドが異常終了しました(code ${code})。\n${stderrTail}`);
             }
         });
 
         const apiBase = `http://127.0.0.1:${port}`;
         const healthy = await waitUntilHealthy(apiBase);
         if (!healthy) {
-            vscode.window.showErrorMessage('CodeLitmus: バックエンドの起動確認がタイムアウトしました。codelitmus.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。');
+            vscode.window.showErrorMessage('Fathom: バックエンドの起動確認がタイムアウトしました。fathom.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。');
             this.stop();
             return undefined;
         }
@@ -160,8 +160,8 @@ class BackendServer {
     }
 }
 
-class CodeLitmusViewProvider implements vscode.WebviewViewProvider {
-    public static readonly viewType = 'codelitmus.panelView';
+class FathomViewProvider implements vscode.WebviewViewProvider {
+    public static readonly viewType = 'fathom.panelView';
 
     private view?: vscode.WebviewView;
     private isReady = false;
@@ -188,7 +188,7 @@ class CodeLitmusViewProvider implements vscode.WebviewViewProvider {
         if (fs.existsSync(htmlPath)) {
             webviewView.webview.html = this.buildHtml(webviewView.webview, fs.readFileSync(htmlPath, 'utf8'));
         } else {
-            vscode.window.showErrorMessage(`CodeLitmus Webview HTML not found: ${htmlPath}`);
+            vscode.window.showErrorMessage(`Fathom Webview HTML not found: ${htmlPath}`);
             return;
         }
 
@@ -206,11 +206,11 @@ class CodeLitmusViewProvider implements vscode.WebviewViewProvider {
             } else if (message?.command === 'progressUpdate') {
                 this.onProgressUpdate(message.fileName, message.current, message.total);
             } else if (message?.command === 'showRecentFiles') {
-                vscode.commands.executeCommand('codelitmus.showRecentFiles');
+                vscode.commands.executeCommand('fathom.showRecentFiles');
             } else if (message?.command === 'requestStartSession') {
                 // ファイル未選択の案内ビューからの導線。アクティブエディタが無ければ
                 // コマンド側がファイル選択ダイアログを開く。
-                vscode.commands.executeCommand('codelitmus.startSession');
+                vscode.commands.executeCommand('fathom.startSession');
             } else if (message?.command === 'addFolderToWorkspace') {
                 vscode.commands.executeCommand('workbench.action.addRootFolder');
             }
@@ -248,7 +248,7 @@ class CodeLitmusViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    // 設定 codelitmus.outputLanguage の変更をWebviewへ伝える。
+    // 設定 fathom.outputLanguage の変更をWebviewへ伝える。
     // 反映されるのは以後に生成する質問からで、生成済みの履歴は元の言語のまま残る。
     public notifyLocaleChanged(): void {
         if (this.view && this.isReady) {
@@ -267,23 +267,23 @@ class CodeLitmusViewProvider implements vscode.WebviewViewProvider {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('CodeLitmus VS Code Extension is active.');
+    console.log('Fathom VS Code Extension is active.');
 
     // 対象ファイル・進捗を表示するステータスバー項目(クリックでパネルを開く)
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBarItem.command = `${CodeLitmusViewProvider.viewType}.focus`;
-    statusBarItem.text = '$(sparkle) CodeLitmus';
-    statusBarItem.tooltip = 'CodeLitmusパネルを開く';
+    statusBarItem.command = `${FathomViewProvider.viewType}.focus`;
+    statusBarItem.text = '$(sparkle) Fathom';
+    statusBarItem.tooltip = 'Fathomパネルを開く';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
-    const provider = new CodeLitmusViewProvider(context, (fileName, current, total) => {
-        statusBarItem.text = `$(sparkle) CodeLitmus: ${fileName} (${current}/${total})`;
+    const provider = new FathomViewProvider(context, (fileName, current, total) => {
+        statusBarItem.text = `$(sparkle) Fathom: ${fileName} (${current}/${total})`;
     });
     context.subscriptions.push(
         // retainContextWhenHidden: パネルのタブを切り替えてもWebviewを破棄せず、
         // 星座マップやセッションの進行状況がリセットされないようにする(CLAUDE.mdの規約)。
-        vscode.window.registerWebviewViewProvider(CodeLitmusViewProvider.viewType, provider, {
+        vscode.window.registerWebviewViewProvider(FathomViewProvider.viewType, provider, {
             webviewOptions: { retainContextWhenHidden: true }
         })
     );
@@ -298,7 +298,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('codelitmus.outputLanguage')) {
+            if (e.affectsConfiguration('fathom.outputLanguage')) {
                 provider.notifyLocaleChanged();
             }
         })
@@ -318,8 +318,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // コマンド登録: codelitmus.startSession (Ctrl + Alt + D)
-    let disposable = vscode.commands.registerCommand('codelitmus.startSession', async () => {
+    // コマンド登録: fathom.startSession (Ctrl + Alt + D)
+    let disposable = vscode.commands.registerCommand('fathom.startSession', async () => {
         let filePath = "";
 
         const editor = vscode.window.activeTextEditor;
@@ -330,7 +330,7 @@ export function activate(context: vscode.ExtensionContext) {
                 canSelectFiles: true,
                 canSelectFolders: false,
                 canSelectMany: false,
-                openLabel: 'CodeLitmus 理解度テストを開始',
+                openLabel: 'Fathom 理解度テストを開始',
                 filters: { 'Python Files': ['py'] }
             });
             if (uri && uri.length > 0) {
@@ -339,12 +339,12 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         if (!filePath) {
-            vscode.window.showWarningMessage('CodeLitmus: テスト対象のファイルが選択されていません。');
+            vscode.window.showWarningMessage('Fathom: テスト対象のファイルが選択されていません。');
             return;
         }
 
-        // パネル領域のCodeLitmusビューを表示（未生成なら resolveWebviewView をトリガーする）
-        await vscode.commands.executeCommand(`${CodeLitmusViewProvider.viewType}.focus`);
+        // パネル領域のFathomビューを表示（未生成なら resolveWebviewView をトリガーする）
+        await vscode.commands.executeCommand(`${FathomViewProvider.viewType}.focus`);
         provider.postMessage({
             command: 'initSession',
             filePath: filePath,
@@ -354,10 +354,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(disposable);
 
-    // コマンド登録: codelitmus.showRecentFiles (フォルダをまたいだ最近のテスト対象ファイル一覧)
-    const showRecentDisposable = vscode.commands.registerCommand('codelitmus.showRecentFiles', async () => {
+    // コマンド登録: fathom.showRecentFiles (フォルダをまたいだ最近のテスト対象ファイル一覧)
+    const showRecentDisposable = vscode.commands.registerCommand('fathom.showRecentFiles', async () => {
         if (!backend.apiBase) {
-            vscode.window.showWarningMessage('CodeLitmus: バックエンドがまだ起動していません。');
+            vscode.window.showWarningMessage('Fathom: バックエンドがまだ起動していません。');
             return;
         }
 
@@ -365,7 +365,7 @@ export function activate(context: vscode.ExtensionContext) {
             const json = await httpGetJson(`${backend.apiBase}/api/projects/recent?limit=15`);
             const projects: any[] = json?.data ?? [];
             if (json?.status !== 'success' || projects.length === 0) {
-                vscode.window.showInformationMessage('CodeLitmus: まだテストしたファイルの履歴がありません。');
+                vscode.window.showInformationMessage('Fathom: まだテストしたファイルの履歴がありません。');
                 return;
             }
 
@@ -385,7 +385,7 @@ export function activate(context: vscode.ExtensionContext) {
                 await vscode.window.showTextDocument(doc);
             }
         } catch (err: any) {
-            vscode.window.showErrorMessage(`CodeLitmus: 最近のファイル取得に失敗しました。${err?.message ?? err}`);
+            vscode.window.showErrorMessage(`Fathom: 最近のファイル取得に失敗しました。${err?.message ?? err}`);
         }
     });
 

@@ -1,17 +1,17 @@
 {
-  "name": "codelitmus-vscode",
+  "name": "fathom-vscode",
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "2.0.0",
-  "publisher": "codelitmus",
+  "publisher": "fathom",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ohban730/CodeLitmus.git"
+    "url": "https://github.com/ohban730/Fathom.git"
   },
   "bugs": {
-    "url": "https://github.com/ohban730/CodeLitmus/issues"
+    "url": "https://github.com/ohban730/Fathom/issues"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -37,27 +37,27 @@
     "japanese"
   ],
   "activationEvents": [
-    "onCommand:codelitmus.startSession",
-    "onCommand:codelitmus.showRecentFiles",
-    "onView:codelitmus.panelView"
+    "onCommand:fathom.startSession",
+    "onCommand:fathom.showRecentFiles",
+    "onView:fathom.panelView"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "codelitmus.startSession",
+        "command": "fathom.startSession",
         "title": "%command.startSession.title%",
         "icon": "$(brain)"
       },
       {
-        "command": "codelitmus.showRecentFiles",
+        "command": "fathom.showRecentFiles",
         "title": "%command.showRecentFiles.title%",
         "icon": "$(history)"
       }
     ],
     "keybindings": [
       {
-        "command": "codelitmus.startSession",
+        "command": "fathom.startSession",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d",
         "when": "editorTextFocus"
@@ -66,35 +66,35 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "codelitmusPanelContainer",
-          "title": "CodeLitmus",
+          "id": "fathomPanelContainer",
+          "title": "Fathom",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "codelitmusPanelContainer": [
+      "fathomPanelContainer": [
         {
           "type": "webview",
-          "id": "codelitmus.panelView",
-          "name": "CodeLitmus"
+          "id": "fathom.panelView",
+          "name": "Fathom"
         }
       ]
     },
     "configuration": {
-      "title": "CodeLitmus",
+      "title": "Fathom",
       "properties": {
-        "codelitmus.pythonPath": {
+        "fathom.pythonPath": {
           "type": "string",
           "default": "",
           "description": "%configuration.pythonPath.description%"
         },
-        "codelitmus.ollamaModel": {
+        "fathom.ollamaModel": {
           "type": "string",
           "default": "",
           "description": "%configuration.ollamaModel.description%"
         },
-        "codelitmus.outputLanguage": {
+        "fathom.outputLanguage": {
           "type": "string",
           "enum": [
             "ja",

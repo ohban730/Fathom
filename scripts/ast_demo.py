@@ -25,7 +25,7 @@ print("=" * 60)
 print(ast.dump(tree, indent=2))
 
 # ========================================
-# 2. 関数だけを抽出する（CodeLitmusのChunk分割に直結）
+# 2. 関数だけを抽出する（FathomのChunk分割に直結）
 # ========================================
 print("\n" + "=" * 60)
 print("【2】関数の一覧を抽出（= Chunk候補）")
@@ -90,10 +90,10 @@ for node in ast.iter_child_nodes(tree2):
         print(f"\n[関数] {node.name}({', '.join(args)}) (行 {node.lineno}-{node.end_lineno})")
 
 # ========================================
-# 4. CodeLitmusでの使い方のイメージ
+# 4. Fathomでの使い方のイメージ
 # ========================================
 print("\n" + "=" * 60)
-print("【4】CodeLitmus向け: Chunk一覧の生成イメージ")
+print("【4】Fathom向け: Chunk一覧の生成イメージ")
 print("=" * 60)
 
 def extract_chunks(source_code: str) -> list[dict]:

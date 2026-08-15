@@ -1,6 +1,6 @@
-# CodeLitmus データコントラクト — Chunkオブジェクトのスキーマ
+# Fathom データコントラクト — Chunkオブジェクトのスキーマ
 
-> このドキュメントは Python解析層(`codelitmus/parser.py`, `codelitmus/core.py`)・HTTP API層(`main.py`)・
+> このドキュメントは Python解析層(`fathom/parser.py`, `fathom/core.py`)・HTTP API層(`main.py`)・
 > VS Code拡張ホスト(`vscode-extension/src/extension.ts`)・Webviewレンダラー(`vscode-extension/src/webview/index.html`)
 > を実装コードから直接読み、境界を越えるたびにデータがどう変わるかをまとめたものです。
 
@@ -9,9 +9,9 @@
 想定されがちな流れ（Python解析 → 拡張機能ホスト → Webview描画）とは異なり、実際は次の通りです。
 
 ```
-codelitmus/parser.py (AST解析)
+fathom/parser.py (AST解析)
    └─ CodeChunk オブジェクト
-        └─ codelitmus/core.py が dict化してセッション情報に同梱
+        └─ fathom/core.py が dict化してセッション情報に同梱
              └─ main.py (vscode-extension/配下, FastAPI, http://127.0.0.1:8000)
                   └─ Webview (index.html) が fetch() で直接HTTPを叩く
                        └─ 星座マップ・質問・採点結果を描画
@@ -23,7 +23,7 @@ vscode-extension/src/extension.ts
 
 **拡張機能ホスト(`extension.ts`)はChunk/セッション/スコアのデータを中継していません。** Webviewはアクティブファイルが切り替わったことだけを拡張ホストから知らされ、そのあとは自分でFastAPIサーバーに直接HTTPリクエストを投げてすべてのデータを取得します。
 
-FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-extension/main.py`)で、`python main.py`で起動する。`codelitmus/`パッケージもmain.pyと同じ`vscode-extension/`配下に同居させている(2026-08-09に移動)。理由: `vsce package`(拡張機能の配布パッケージ作成)は`vscode-extension/`配下しか対象にしないため、Pythonバックエンドをこの外に置いたままでは配布物に含まれない。
+FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-extension/main.py`)で、`python main.py`で起動する。`fathom/`パッケージもmain.pyと同じ`vscode-extension/`配下に同居させている(2026-08-09に移動)。理由: `vsce package`(拡張機能の配布パッケージ作成)は`vscode-extension/`配下しか対象にしないため、Pythonバックエンドをこの外に置いたままでは配布物に含まれない。
 
 > 過去には`server/`ディレクトリ(`server_app.py`, `run_server.py`, `server/run.py`, `server/test_server.py`)が存在し、いずれも存在しない`server/main.py`を`from server.main import app` / `from main import app`でインポートしようとする死んだコードだった(実行すると全て`ModuleNotFoundError`)。おそらく`main.py`を`server/`配下へ移す途中で放棄されたリファクタリングの残骸。2026-08-09に削除済み。
 
@@ -31,7 +31,7 @@ FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-ext
 
 ## 1. CodeChunk — 解析結果の中核オブジェクト
 
-出典: [`codelitmus/parser.py`](../vscode-extension/codelitmus/parser.py) の `CodeChunk` dataclass（`to_dict()`でこの形のdictになる）。
+出典: [`fathom/parser.py`](../vscode-extension/fathom/parser.py) の `CodeChunk` dataclass（`to_dict()`でこの形のdictになる）。
 
 ```json
 {
@@ -66,7 +66,7 @@ FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-ext
 
 ## 2. 境界①: Python解析層 → セッション初期化レスポンス
 
-出典: [`codelitmus/core.py`](../vscode-extension/codelitmus/core.py) `CodeLitmusCore.start_session_for_file()`。
+出典: [`fathom/core.py`](../vscode-extension/fathom/core.py) `FathomCore.start_session_for_file()`。
 
 ```json
 {
@@ -91,7 +91,7 @@ FastAPIアプリの実体は[`main.py`](../vscode-extension/main.py)(`vscode-ext
 }
 ```
 
-`project`/`session`のフィールドは [`codelitmus/db.py`](../vscode-extension/codelitmus/db.py) の `projects`/`sessions` テーブル定義そのまま（SQLite行を`dict()`化したもの）。
+`project`/`session`のフィールドは [`fathom/db.py`](../vscode-extension/fathom/db.py) の `projects`/`sessions` テーブル定義そのまま（SQLite行を`dict()`化したもの）。
 
 ---
 
@@ -125,7 +125,7 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
   }
 }
 ```
-`rubric`の`max`合計は常に100になる想定（[`codelitmus/llm.py`](../vscode-extension/codelitmus/llm.py) `build_question_prompt`のプロンプト制約）。
+`rubric`の`max`合計は常に100になる想定（[`fathom/llm.py`](../vscode-extension/fathom/llm.py) `build_question_prompt`のプロンプト制約）。
 
 ### 出力言語（locale）
 
@@ -155,7 +155,7 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
 }
 ```
 
-**スコアはここで計算される**（[`codelitmus/core.py`](../vscode-extension/codelitmus/core.py) `evaluate_answer_and_save`）: `score_details`が返ってきた場合はサーバー側で各項目の`score`を合算して`score`を再計算する（LLMが返した`score`トップレベル値は`score_details`が空のときのフォールバックとしてのみ使う）。「わからない」等の無解回答は`is_unknown_or_empty_answer()`により即座に全項目0点。
+**スコアはここで計算される**（[`fathom/core.py`](../vscode-extension/fathom/core.py) `evaluate_answer_and_save`）: `score_details`が返ってきた場合はサーバー側で各項目の`score`を合算して`score`を再計算する（LLMが返した`score`トップレベル値は`score_details`が空のときのフォールバックとしてのみ使う）。「わからない」等の無解回答は`is_unknown_or_empty_answer()`により即座に全項目0点。
 
 ### `GET /api/analytics/{project_id}`
 ```json
@@ -177,7 +177,7 @@ Webviewが実際に読むのは `data.engine`（例: `"Ollama (Local LLM)"` / `"
 }
 ```
 
-> 📌 **`miss_categories` / `top_weaknesses` の集計キー**: 集計は必ず `id`（言語にも表記にも依存しない安定ID）の完全一致で行い、`label` は表示専用。以前は自由記述の日本語ラベルをそのまま集計キーにしていたため、「例外クラス名の欠落」と「例外クラス名の見落とし」のような表記揺れで同じ弱点が別タグに分裂していた（実測: 履歴103件に対しユニークタグ74種）。`id` の語彙は [`codelitmus/llm.py`](../vscode-extension/codelitmus/llm.py) の `MISS_CATEGORY_VOCAB` にあり、語彙外は `other:` プレフィックス付きの英語snake_caseに隔離される。旧形式（文字列の配列）で保存された履歴は `normalize_miss_categories()` がラベル自身をIDとみなして読むため、過去データも従来どおり集計される。
+> 📌 **`miss_categories` / `top_weaknesses` の集計キー**: 集計は必ず `id`（言語にも表記にも依存しない安定ID）の完全一致で行い、`label` は表示専用。以前は自由記述の日本語ラベルをそのまま集計キーにしていたため、「例外クラス名の欠落」と「例外クラス名の見落とし」のような表記揺れで同じ弱点が別タグに分裂していた（実測: 履歴103件に対しユニークタグ74種）。`id` の語彙は [`fathom/llm.py`](../vscode-extension/fathom/llm.py) の `MISS_CATEGORY_VOCAB` にあり、語彙外は `other:` プレフィックス付きの英語snake_caseに隔離される。旧形式（文字列の配列）で保存された履歴は `normalize_miss_categories()` がラベル自身をIDとみなして読むため、過去データも従来どおり集計される。
 
 > ⚠ **envelopeの不整合**: 他の3エンドポイントはペイロードを`data`キーに入れるが、このエンドポイントだけ`analytics`キーを使う（Webview側`index.html`のコードでも`json.analytics`として読んでいる — `json.data`ではない）。新規エンドポイントを追加する際はこの不整合を広げないよう`data`に統一することを推奨。
 
@@ -207,13 +207,13 @@ Webview → ホスト:
 
 | データ | 生成場所 | 保存場所 | 消費場所 |
 |---|---|---|---|
-| `CodeChunk`（§1） | `codelitmus/parser.py` | セッション中はメモリのみ（DB非永続化） | Webview（星座マップ描画・質問/採点APIへのリクエスト同梱） |
-| `question.rubric` / `mermaid_diagram` | LLM（Ollama/Mock, `codelitmus/llm.py`） | `qa_histories.mermaid_diagram`（DB） | Webview（質問表示・図解モーダル） |
-| `score` / `score_details` / `miss_categories` | `codelitmus/core.py`（LLM出力をサーバー側で再計算） | `qa_histories`（DB, JSON文字列） | Webview（採点結果表示・星座マップの合否色分け） |
-| `chunk_summary` / `top_weaknesses` | `codelitmus/db.py` `get_project_analytics()` | 集計元は`qa_histories` | Webview（星座マップの既学習ステータス、終了画面） |
+| `CodeChunk`（§1） | `fathom/parser.py` | セッション中はメモリのみ（DB非永続化） | Webview（星座マップ描画・質問/採点APIへのリクエスト同梱） |
+| `question.rubric` / `mermaid_diagram` | LLM（Ollama/Mock, `fathom/llm.py`） | `qa_histories.mermaid_diagram`（DB） | Webview（質問表示・図解モーダル） |
+| `score` / `score_details` / `miss_categories` | `fathom/core.py`（LLM出力をサーバー側で再計算） | `qa_histories`（DB, JSON文字列） | Webview（採点結果表示・星座マップの合否色分け） |
+| `chunk_summary` / `top_weaknesses` | `fathom/db.py` `get_project_analytics()` | 集計元は`qa_histories` | Webview（星座マップの既学習ステータス、終了画面） |
 
 ---
 
 ## 6. 「デモ固有ロジック禁止」ルールとの関係
 
-[`CLAUDE.md`](../CLAUDE.md) の「No Demo-Specific Logic」ルールは、この契約があることで機械的にチェックしやすくなる。例えば `MockLLMClient.ask()`（[`codelitmus/llm.py`](../vscode-extension/codelitmus/llm.py)）は `"名前: __main__"` や `"名前: divide_with_raise"` のようにプロンプト文字列へ特定のChunk名が含まれるかで分岐しているが、これは**デモ用フォールバック実装として明示されている**ものであり、本番の採点経路（Ollama接続時）はこの分岐を通らない。新しいスコアリングロジックを実装する際は、`MockLLMClient`ではなく`OllamaClient`経路、または本ドキュメントのスキーマに対するプロパティベーステストで検証すること。
+[`CLAUDE.md`](../CLAUDE.md) の「No Demo-Specific Logic」ルールは、この契約があることで機械的にチェックしやすくなる。例えば `MockLLMClient.ask()`（[`fathom/llm.py`](../vscode-extension/fathom/llm.py)）は `"名前: __main__"` や `"名前: divide_with_raise"` のようにプロンプト文字列へ特定のChunk名が含まれるかで分岐しているが、これは**デモ用フォールバック実装として明示されている**ものであり、本番の採点経路（Ollama接続時）はこの分岐を通らない。新しいスコアリングロジックを実装する際は、`MockLLMClient`ではなく`OllamaClient`経路、または本ドキュメントのスキーマに対するプロパティベーステストで検証すること。

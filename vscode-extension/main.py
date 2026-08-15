@@ -1,5 +1,5 @@
 """
-CodeLitmus — FastAPI ローカルバックエンドサーバー (main.py)
+Fathom — FastAPI ローカルバックエンドサーバー (main.py)
 
 - Phase 2 VS Code 拡張機能向け REST API
 - AST解析・Ollama/Mock採点・SQLite永続化の全ロジックを統合
@@ -16,16 +16,16 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from codelitmus.core import CodeLitmusCore
-from codelitmus.parser import CodeChunk, parse_code_chunks, calculate_file_hash
-from codelitmus.llm import (
+from fathom.core import FathomCore
+from fathom.parser import CodeChunk, parse_code_chunks, calculate_file_hash
+from fathom.llm import (
     OllamaClient,
     MockLLMClient,
     is_unknown_or_empty_answer,
     list_ollama_models,
     configured_ollama_model,
 )
-from codelitmus.db import (
+from fathom.db import (
     get_qa_histories_for_session,
     get_chunk_history_summary,
     get_recent_projects,
@@ -35,7 +35,7 @@ from codelitmus.db import (
 )
 
 app = FastAPI(
-    title="CodeLitmus Local Backend API",
+    title="Fathom Local Backend API",
     description="VS Code 拡張機能向けコード理解サポート API",
     version="2.0.0"
 )
@@ -56,11 +56,11 @@ app.add_middleware(
 # 学習履歴が消えるため、更新をまたいで残る保存領域(VS Codeの
 # globalStorageUri)を拡張機能側から環境変数で受け取る。
 # 未設定のまま単体起動された場合(手動uvicorn・テスト)は従来どおりROOT_DIR。
-DB_PATH = os.environ.get("CODELITMUS_DB_PATH", "").strip() or os.path.join(ROOT_DIR, "codelitmus.db")
+DB_PATH = os.environ.get("FATHOM_DB_PATH", "").strip() or os.path.join(ROOT_DIR, "fathom.db")
 _db_dir = os.path.dirname(os.path.abspath(DB_PATH))
 if _db_dir:
     os.makedirs(_db_dir, exist_ok=True)
-core = CodeLitmusCore(db_path=DB_PATH)
+core = FathomCore(db_path=DB_PATH)
 
 # リクエスト / レスポンスの Pydantic モデル定義
 class SessionStartRequest(BaseModel):
@@ -68,7 +68,7 @@ class SessionStartRequest(BaseModel):
     target_score: int = 70
 
 # locale: LLMが生成する文章(質問・フィードバック・自由課題)の出力言語。
-# プロンプト本文は日本語のまま、出力言語だけを切り替える(codelitmus/llm.py 参照)。
+# プロンプト本文は日本語のまま、出力言語だけを切り替える(fathom/llm.py 参照)。
 # 未対応の値が来ても resolve_locale() が既定値に丸めるため、ここでは検証しない。
 class QuestionGenerateRequest(BaseModel):
     chunk: Dict[str, Any]
@@ -100,7 +100,7 @@ class ExplorationGenerateRequest(BaseModel):
 def read_root():
     """ルートパスアクセス時の案内"""
     return {
-        "message": "CodeLitmus Local Backend API Server is running!",
+        "message": "Fathom Local Backend API Server is running!",
         "docs": "http://127.0.0.1:8000/docs",
         "health": "http://127.0.0.1:8000/api/health"
     }
@@ -126,7 +126,7 @@ def ollama_models():
         "available": list_ollama_models(),
         "current_model": core.llm.model if isinstance(core.llm, OllamaClient) else None,
         "using_ollama": isinstance(core.llm, OllamaClient),
-        # 設定 `codelitmus.ollamaModel` の値。空文字なら未設定(=一覧の先頭を自動選択)。
+        # 設定 `fathom.ollamaModel` の値。空文字なら未設定(=一覧の先頭を自動選択)。
         # current_model と食い違う場合は、設定値がpull済み一覧になかったか、
         # UIのドロップダウンでこのセッション限りの切り替えが行われている。
         "configured_model": configured_ollama_model(),
@@ -137,7 +137,7 @@ def set_ollama_model(req: OllamaModelSetRequest):
     """使用するOllamaモデルを切り替える。Mockエンジン状態からの復帰(再接続)もこの経路で試みる。
 
     切り替えはこのバックエンドプロセスが生きている間だけ有効(VS Codeを閉じると
-    設定 `codelitmus.ollamaModel` の値に戻る)。UIのドロップダウンは一覧から選ばせる
+    設定 `fathom.ollamaModel` の値に戻る)。UIのドロップダウンは一覧から選ばせる
     ため、ここでは名前を丸めず(verify_available=False)、実際にaskさせて疎通確認する。
     """
     try:

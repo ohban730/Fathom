@@ -1,4 +1,4 @@
-/* CodeLitmus — Tailwind ビルド入力。`npm run build:css` で media/vendor/tailwind.css を生成する。 */
+/* Fathom — Tailwind ビルド入力。`npm run build:css` で media/vendor/tailwind.css を生成する。 */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
