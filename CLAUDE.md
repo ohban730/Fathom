@@ -9,7 +9,7 @@
 Never hardcode behavior keyed to specific demo/sample files (e.g., filename checks, mock scores for `example.py`). All parsing and scoring logic must be generic and work on any file in the workspace. If real data is unavailable, surface an explicit 'no data' state instead of fabricating values.
 
 ## Environment
-- Always activate the project conda env before running Python: `conda activate codelitmus` (do not create new envs or use base). The env keeps its pre-rename name; only the product was renamed to Fathom. Docs tell new users to create it as `fathom`, which is fine — the name is arbitrary, `fathom.pythonPath` just needs to point at an interpreter that can import fastapi/uvicorn/pydantic/requests.
+- Always activate the project conda env before running Python: `conda activate fathom` (do not create new envs or use base). The pre-rename `codelitmus` env still exists on this machine but is no longer the project env.
 - Ask before running `git add -A`; stage only files relevant to the current task and show `git status` first.
 - Commit at each verified milestone rather than batching everything into one commit at the end of a session — this keeps rollback points granular and makes bad approaches a `git revert` instead of a manual untangle.
 
