@@ -1233,13 +1233,14 @@
         badge.classList.toggle('text-amber-300', isMock);
         banner.classList.toggle('hidden', !isMock);
 
-        if (isMock) {
-          modelSelect.classList.add('hidden');
-        } else {
-          await refreshOllamaModelOptions();
-        }
+        // Mockのときも一覧を引く。Ollamaを後から入れた/起動した場合、ここで
+        // ドロップダウンが出れば選ぶだけで実LLMへ復帰できる(バックエンドの
+        // /api/ollama/model はMock状態からの再接続に対応している)。
+        // pull済みモデルが1つも無ければ refreshOllamaModelOptions 側で非表示になる。
+        await refreshOllamaModelOptions();
       } catch(e) {
-        badge.innerText = "Disconnected (Port 8000)";
+        // ポート番号は動的に確保するため文言に埋め込まない。
+        badge.innerText = "Disconnected";
         banner.classList.add('hidden');
         modelSelect.classList.add('hidden');
       }
@@ -1276,6 +1277,9 @@
         if (data.status === 'success') {
           badge.innerText = data.engine;
           showToast(`モデルを切り替えました: ${model}`);
+          // Mockから復帰した場合はバッジの色と警告バナーも戻す必要があるため、
+          // 状態の再取得はcheckHealthに一任する。
+          await checkHealth();
         } else {
           showToast('モデルの切り替えに失敗しました');
         }
