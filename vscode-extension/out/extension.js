@@ -50,8 +50,17 @@ function httpGetOk(url) {
         });
     });
 }
-async function waitUntilHealthy(apiBase, retries = 30, intervalMs = 300) {
+// バックエンドの起動待ち。初回起動はPython本体の起動とfastapi/uvicornの
+// インポートだけで10秒近くかかることがある(低速なディスクやウイルス対策の
+// スキャンが挟まる環境では特に)。短く打ち切ると、実際には正常な環境で
+// タイムアウト扱いになってしまうため、上限は余裕を持って60秒とする。
+// ただし依存パッケージ不足などで即死した場合に60秒待たされては困るので、
+// shouldAbort でプロセスの終了を検知したら即座に打ち切る。
+async function waitUntilHealthy(apiBase, shouldAbort = () => false, retries = 120, intervalMs = 500) {
     for (let i = 0; i < retries; i++) {
+        if (shouldAbort()) {
+            return false;
+        }
         if (await httpGetOk(`${apiBase}/api/health`)) {
             return true;
         }
@@ -120,16 +129,27 @@ class BackendServer {
         proc.on('error', (err) => {
             vscode.window.showErrorMessage(`Fathom: バックエンドの起動に失敗しました(${pythonPath}): ${err.message}`);
         });
+        let exited = false;
         proc.on('exit', (code) => {
+            exited = true;
             this.apiBase = undefined;
             if (code !== null && code !== 0) {
                 vscode.window.showErrorMessage(`Fathom: バックエンドが異常終了しました(code ${code})。\n${stderrTail}`);
             }
         });
         const apiBase = `http://127.0.0.1:${port}`;
-        const healthy = await waitUntilHealthy(apiBase);
+        const healthy = await waitUntilHealthy(apiBase, () => exited);
         if (!healthy) {
-            vscode.window.showErrorMessage('Fathom: バックエンドの起動確認がタイムアウトしました。fathom.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。');
+            // 即死した場合は exit ハンドラ側が stderr 付きで具体的な原因を出すので、
+            // ここで重ねて通知しない(同じ失敗に2つ通知が出ると原因が分かりにくい)。
+            if (!exited) {
+                const detail = stderrTail.trim()
+                    ? `\n\nバックエンドの出力:\n${stderrTail.trim()}`
+                    : '';
+                vscode.window.showErrorMessage('Fathom: バックエンドの起動確認がタイムアウトしました(60秒)。' +
+                    'fathom.pythonPathの設定と依存パッケージ(fastapi/uvicorn/pydantic/requests)を確認してください。' +
+                    detail);
+            }
             this.stop();
             return undefined;
         }
