@@ -202,6 +202,7 @@ Fathomはファイルの絶対パスだけで動くため、今開いている�
 
 ## ドキュメント
 
+- [vscode-extension/CHANGELOG.md](vscode-extension/CHANGELOG.md) — バージョンごとの変更履歴(Marketplaceの「Changelog」タブに表示されるもの)
 - [docs/data-contract.md](docs/data-contract.md) — Chunkデータが各境界(Python解析層/FastAPI/拡張ホスト/Webview)でどう変わるかのスキーマ契約
 - [docs/system_architecture.md](docs/system_architecture.md) — Phase 1(Streamlit MVP)時点の全体アーキテクチャ設計
 - [CLAUDE.md](CLAUDE.md) — このリポジトリで開発する際の規約
