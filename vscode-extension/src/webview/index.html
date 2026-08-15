@@ -223,7 +223,8 @@
 
   <div id="mock-mode-banner" class="hidden mb-4 px-4 py-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
     <span>⚠️</span>
-    <span>Mockエンジン動作中: 採点・質問はデモ用の固定フィードバックで、コード内容は実際には評価されていません。Ollamaを起動して<code class="px-1 rounded bg-amber-500/20">ollama pull</code>すると、数秒後にヘッダーにモデル選択が現れます。選ぶと実LLMに切り替わります。</span>
+    <span class="flex-1">Mockエンジン動作中: 採点・質問はデモ用の固定フィードバックで、コード内容は実際には評価されていません。Ollamaを起動して<code class="px-1 rounded bg-amber-500/20">ollama pull</code>したあと、ヘッダーに現れるモデル選択から切り替えてください。</span>
+    <button id="btn-recheck-engine" class="shrink-0 px-2.5 py-1 rounded border border-amber-500/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/30 transition-colors" title="Ollamaの状態を今すぐ確認し直す">🔄 再確認</button>
   </div>
 
   <!-- ──────────────────────────────────────────
@@ -535,6 +536,18 @@
         switchOllamaModel(e.target.value);
       });
 
+      document.getElementById('btn-recheck-engine').addEventListener('click', async () => {
+        const btn = document.getElementById('btn-recheck-engine');
+        btn.disabled = true;
+        btn.innerText = '確認中...';
+        await checkHealth();
+        // 自動確認の窓を開き直す。「今からpullする」タイミングで押されることも
+        // 想定されるため、1回確認して終わりにはしない。
+        startMockRecheck();
+        btn.disabled = false;
+        btn.innerText = '🔄 再確認';
+      });
+
       document.getElementById('btn-recent-files').addEventListener('click', () => {
         if (vscode) {
           vscode.postMessage({ command: 'showRecentFiles' });
@@ -565,6 +578,9 @@
           API_BASE = message.apiBase;
           if (message.locale) state.locale = message.locale;
           checkHealth();
+          // pullがパネルを開いた直後に完了するケースを自動で拾うための窓。
+          // Mockでなければ最初のcheckHealthが即座に閉じる。
+          startMockRecheck();
           return;
         }
         if (message.command === 'localeChanged') {
@@ -1219,14 +1235,42 @@
       hideSelectionPromptPopup();
     });
 
-    // Mockで動いている間だけ、定期的にヘルスチェックをやり直す。
+    // Mockで動いている間の再確認。
     // checkHealthはbackendReadyを受け取ったときの1回しか走らず、パネルは
     // retainContextWhenHidden:true でタブを切り替えても再読み込みされない。
-    // そのため、パネルを開いた後にollama pullが完了しても、この再確認が無いと
+    // そのため、パネルを開いた後にollama pullが完了しても、再確認が無いと
     // ウィンドウを再読み込みするまでモデルの存在に気づけない。
-    // 実LLMに切り替わったら止めるので、常時ポーリングにはならない。
+    //
+    // ただし無期限のポーリングにはしない。Ollamaを導入せずMockのまま使う
+    // ユーザーにとっては、成功する見込みのない確認が延々と走り続けることに
+    // なるため。pull直後という最も多いケースを拾える約2分だけ自動で確認し、
+    // それ以降はバナーの「再確認」ボタンに委ねる。
     let mockRecheckTimer = null;
+    let mockRecheckLeft = 0;
     const MOCK_RECHECK_INTERVAL_MS = 10000;
+    const MOCK_RECHECK_MAX = 12; // 10秒 x 12 = 約2分
+
+    function stopMockRecheck() {
+      if (mockRecheckTimer) {
+        clearInterval(mockRecheckTimer);
+        mockRecheckTimer = null;
+      }
+      mockRecheckLeft = 0;
+    }
+
+    // 自動確認の窓を開き直す。パネル生成時と「再確認」ボタンから呼ばれる。
+    function startMockRecheck() {
+      stopMockRecheck();
+      mockRecheckLeft = MOCK_RECHECK_MAX;
+      mockRecheckTimer = setInterval(() => {
+        if (mockRecheckLeft <= 0) {
+          stopMockRecheck();
+          return;
+        }
+        mockRecheckLeft -= 1;
+        checkHealth();
+      }, MOCK_RECHECK_INTERVAL_MS);
+    }
 
     async function checkHealth() {
       const badge = document.getElementById('engine-badge');
@@ -1242,13 +1286,10 @@
         badge.classList.toggle('text-amber-300', isMock);
         banner.classList.toggle('hidden', !isMock);
 
-        if (isMock) {
-          if (!mockRecheckTimer) {
-            mockRecheckTimer = setInterval(checkHealth, MOCK_RECHECK_INTERVAL_MS);
-          }
-        } else if (mockRecheckTimer) {
-          clearInterval(mockRecheckTimer);
-          mockRecheckTimer = null;
+        // 実LLMに切り替わったら自動確認は不要。Mockのままなら、既に開いている
+        // 窓の残り回数を消費させる(ここで開き直すと期限が無くなってしまう)。
+        if (!isMock) {
+          stopMockRecheck();
         }
 
         // Mockのときも一覧を引く。Ollamaを後から入れた/起動した場合、ここで
