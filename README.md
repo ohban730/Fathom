@@ -22,13 +22,23 @@
 
 ### 【共通1】 Python環境の準備
 
+バックエンド用の仮想環境を1つ用意し、依存パッケージを入れます。**この時点ではリポジトリをクローンしている必要はありません**(パッケージ名を直接指定するため、どのディレクトリで実行しても同じです)。
+
 ```bash
 conda create -n fathom python=3.11
 conda activate fathom
-pip install -r vscode-extension/requirements.txt
+pip install fastapi "uvicorn[standard]" pydantic requests
 ```
 
-condaを使わない場合も、`vscode-extension/requirements.txt`(fastapi / uvicorn / pydantic / requests)をpip installできる仮想環境を1つ用意してください。**この環境の`python.exe`の絶対パスを後で使う**ので控えておきます。
+- 環境名は`fathom`でなくても構いません。condaでなくvenvでも構いません
+- リポジトリをクローン済みなら、**リポジトリのルート**(`README.md`と`vscode-extension/`が並んでいる階層)で `pip install -r vscode-extension/requirements.txt` としても同じです
+- `conda activate`を忘れるとbase環境に入ってしまい、次の手順で指定するPythonからは見えません
+
+**この環境の`python.exe`の絶対パスを後で使う**ので控えておいてください。分からなくなったら、環境に入った状態で以下を実行すると表示されます。
+
+```bash
+python -c "import sys; print(sys.executable)"
+```
 
 ### 【共通2】 (任意) Ollamaのセットアップ
 

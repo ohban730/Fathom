@@ -30,13 +30,21 @@
 
 ### 1. Pythonの依存パッケージをインストール
 
-仮想環境(conda / venvなど)を1つ用意して、以下をインストールします。
+仮想環境(conda / venvなど)を1つ用意して、以下をインストールします。どのディレクトリで実行しても構いません。
 
 ```bash
+conda create -n fathom python=3.11
+conda activate fathom
 pip install fastapi "uvicorn[standard]" pydantic requests
 ```
 
-同じ内容の`requirements.txt`が拡張機能のインストール先(`~/.vscode/extensions/`配下)にも同梱されています。
+同じ内容の`requirements.txt`が拡張機能のインストール先(`~/.vscode/extensions/`配下)にも同梱されていますが、パスが分かりにくいので上記のようにパッケージ名を直接指定するほうが簡単です。
+
+次の手順でこの環境の`python`実行体の絶対パスが必要になります。環境に入った状態で以下を実行すると表示されます。
+
+```bash
+python -c "import sys; print(sys.executable)"
+```
 
 ### 2. Python実行体の絶対パスを指定（**必須**）
 
